@@ -31,3 +31,11 @@ pip install -r requirements.txt
 
 ```
 
+To install the environment, run the following command
+
+```bash
+git clone https://github.com/pwdemars/rl4uc.git
+cd rl4uc
+pip install .
+```
+
