@@ -36,3 +36,43 @@ def process_observation(obs, env, forecast_errors=False):
                                        wind_norm))
 
     return processed_obs
+
+class NStepARMA(object):
+    """
+    ARMA(N,N) process. May be used for demand or wind. 
+    """
+    def __init__(self, p, q, alphas, betas, sigma, name):
+        self.p=p
+        self.q=q
+        self.alphas=alphas
+        self.betas=betas
+        self.name=name
+        self.sigma=sigma
+        self.xs=np.zeros(p) # last N errors
+        self.zs=np.zeros(q) # last N white noise samples
+
+    def sample_error(self):
+        zt = np.random.normal(0, self.sigma)
+        xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
+        return xt, zt
+
+    def step(self, errors=None):
+        """
+        Step forward the arma process. Can take errors, a (xt, zt) tuple to move this forward deterministically. 
+        """
+        if errors is not None:
+            xt, zt = errors # If seeding
+        else:
+            xt, zt = self.sample_error()
+        self.xs = np.roll(self.xs, 1)
+        self.zs = np.roll(self.zs, 1)
+        if self.p>0:
+            self.xs[0] = xt
+        if self.q>0:
+            self.zs[0] = zt
+
+        return xt
+    
+    def reset(self):
+        self.xs = np.zeros(self.p)
+        self.zs = np.zeros(self.q)
