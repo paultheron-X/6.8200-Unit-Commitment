@@ -29,7 +29,7 @@ class UCEnv(gym.Env):
     """
     metadata = {'render.modes': ['human']}
     def __init__(self, gen_info, profiles_df,
-                 mode='train', **kwargs):
+                 mode='train', test_day=-1, **kwargs):
         super(UCEnv, self).__init__()
         
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
@@ -40,11 +40,8 @@ class UCEnv(gym.Env):
         self.dispatch_freq_mins = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
-        if self.mode == 'test':
-            self.episode_length = len(self.profiles_df)
-        else:
-            self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
-            self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
+        self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
+        self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
 
         # Set up the ARMA processes.
         arma_params = kwargs.get('arma_params', DEFAULT_ARMA_PARAMS)
@@ -153,6 +150,8 @@ class UCEnv(gym.Env):
             'wind_errors': spaces.Box(low=-10000, high=10000, shape=(5,), dtype=np.float32),
             'timestep': spaces.Discrete(48)
         })
+        
+        self.test_day = test_day
     
     def step(self, action, deterministic=False, errors=None):
         """
@@ -183,11 +182,13 @@ class UCEnv(gym.Env):
             self.episode_wind_forecast = day_profile.wind.values
 
         else:
-            self.episode_forecast = self.profiles_df.demand.values
-            self.episode_wind_forecast = self.profiles_df.wind.values
+            day, day_profile = self.get_test_day(self.test_day)
+            self.day = day
+            self.episode_forecast = day_profile.demand.values
+            self.episode_wind_forecast = day_profile.wind.values
         
         # Resetting episode variables
-        self.episode_timestep = -1
+        self.episode_timestep = 0
         self.forecast = None
         self.net_demand = None
         self.day_cost = 0
@@ -361,9 +362,9 @@ class UCEnv(gym.Env):
         """
         Roll forecasts forward by one timestep
         """
-        self.episode_timestep += 1 
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
+        self.episode_timestep += 1 
 
     def calculate_lost_load_cost(self, net_demand, disp, availability=None):
 
@@ -578,15 +579,21 @@ class UCEnv(gym.Env):
         When testing, terminal states only occur at the end of the episode. 
         """
         if self.mode == "train":
-            return (self.episode_timestep == (self.episode_length-1)) or self.ens
+            return (self.episode_timestep == self.episode_length) or self.ens
         else: 
-            return self.episode_timestep == (self.episode_length-1)
+            return self.episode_timestep == self.episode_length
 
     def sample_day(self):
         """Sample a random day from self.profiles_df"""
         day = np.random.choice(self.profiles_df.date, 1)
         day_profile = self.profiles_df[self.profiles_df.date == day.item()]
         return day, day_profile
+    
+    def get_test_day(self, day):
+        day = self.profiles_df.date.unique()[day]
+        day_profile = self.profiles_df[self.profiles_df.date == day]
+        return day, day_profile
+        
     
 def create_gen_info(num_gen, dispatch_freq_mins):
     """
@@ -683,7 +690,7 @@ def make_env(mode='train', profiles_df=None, **params):
     
     return env
 
-def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
+def make_env_from_json(env_name='5gen', mode='train', day=-1, profiles_df=None):
     """
     Create an environment instance using parameters set in a .json file 
     """
@@ -700,11 +707,14 @@ def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
         profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
         profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
-    if mode == 'test' and profiles_df is None:
-        raise ValueError("Must supply demand and wind profiles for testing")
+    if mode == 'test':
+        if profiles_df is None:
+            profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN_TEST))
+    # if mode == 'test' and profiles_df is None:
+    #     raise ValueError("Must supply demand and wind profiles for testing")
 
     # Create environment object
-    env = UCEnv(gen_info=gen_info, profiles_df=profiles_df, mode=mode, **params)
+    env = UCEnv(gen_info=gen_info, profiles_df=profiles_df, mode=mode, test_day=day, **params)
     env.reset()
     
     return env

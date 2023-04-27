@@ -33,6 +33,8 @@ def lambda_iteration(load, lambda_low, lambda_high, a, b, mins, maxs, epsilon):
         else:
             lambda_low = lambda_mid
         i += 1
+        if i > 20:
+            break
 
     return calculate_loads(lambda_mid, a, b, mins, maxs, num_gen)
 
