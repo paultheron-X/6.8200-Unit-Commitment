@@ -300,17 +300,17 @@ def save_branches(prof_name, save_dir, n_branches):
 
 
 def retrieve_test_problem(num_gen, prof_name):
-    fn = Path(__file__).parent / '../data/day_ahead/{}gen/30min/{}.csv'.format(num_gen, prof_name)
+    fn = Path(__file__).parent / '../ts4uc_scripts/data/day_ahead/{}gen/30min/{}.csv'.format(num_gen, prof_name)
     return pd.read_csv(fn)
 
 
 def retrieve_env_params(num_gen):
-    fn = Path(__file__).parent / '../data/day_ahead/{}gen/30min/env_params.json'.format(num_gen)
+    fn = Path(__file__).parent / '../ts4uc_scripts/data/day_ahead/{}gen/30min/env_params.json'.format(num_gen)
     return json.load(open(fn))
 
 
 def retrieve_error_scenarios(num_gen):
-    fn = Path(__file__).parent / '../data/error_scenarios/{}gen_scenarios.csv'.format(num_gen)
+    fn = Path(__file__).parent / '../ts4uc_scripts/data/error_scenarios/{}gen_scenarios.csv'.format(num_gen)
     return pd.read_csv(fn)
 
 def mean_std_reward(env, N=10000):

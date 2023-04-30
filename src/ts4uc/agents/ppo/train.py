@@ -258,7 +258,7 @@ class Worker(mp.Process):
 				ep_values.append(value.item())
 
 				# Step environment 
-				new_obs, reward, done = self.env.step(a)
+				new_obs, reward, done, _ = self.env.step(a)
 
 				# Record unscaled reward
 				unscaled_ep_rewards.append(reward)

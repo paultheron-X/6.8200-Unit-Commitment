@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# This file is used to solve a single day with a model-free policy and an agent that was already trained
+
 from rl4uc.environment import make_env
 
 from ts4uc import helpers
@@ -22,7 +24,7 @@ def solve_model_free_day_ahead(env,
     final_schedule = np.zeros((env.episode_length, env.num_gen))
     for t in range(env.episode_length):
         a, sub_obs, sub_acts, log_probs = policy.generate_action(env, obs)
-        obs, reward, done = env.step(a, deterministic=True)
+        obs, reward, done, _ = env.step(a, deterministic=True)
         final_schedule[t,:] = a
     return final_schedule
         

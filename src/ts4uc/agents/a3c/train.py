@@ -63,7 +63,7 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
         value, obs_processed = local_ac.get_value(obs)
         
         # Advance environment
-        new_obs, reward, done = env.step(action)
+        new_obs, reward, done, _ = env.step(action)
 
         # Simple transformation of reward
         reward = 1+reward/-env.min_reward

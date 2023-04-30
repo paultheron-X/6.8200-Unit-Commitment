@@ -1,4 +1,8 @@
-python $HOME/ts4uc/ts4uc/agents/ppo/train.py \
+export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+
+# This traines a PPO agent for 500k timesteps
+
+python src/ts4uc/agents/ppo/train.py \
        --save_dir results/tmp \
        --num_gen 5 \
        --timesteps 500000 \
