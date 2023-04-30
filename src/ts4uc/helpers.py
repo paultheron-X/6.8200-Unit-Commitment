@@ -164,7 +164,7 @@ def run_schedule(env, schedule, deterministic=False):
             results['lost_load_events'] += 1
             print("ENS at period {}; "
                   "forecast: {:.2f}; "
-                  "real: {:.2f}; ".format(env.episode_timestep,env.demand_forecast - env.wind_forecast,env.net_demand))
+                  "real: {:.2f}; ".format(env.episode_timestep, env.demand_forecast - env.wind_forecast,env.net_demand))
                 #   "committed: {:.2f}; "
                 #   "tried to commit: {:.2f}".format(env.episode_timestep,
                 #                              env.forecast - env.wind_forecast,

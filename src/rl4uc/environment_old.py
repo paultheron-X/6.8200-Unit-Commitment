@@ -8,66 +8,12 @@ from scipy.stats import weibull_min, exponweib
 
 from .dispatch import lambda_iteration
 
+from .constants import *
 
-DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
+from .helpers import NStepARMA
 
-DEFAULT_VOLL=10000
-DEFAULT_EPISODE_LENGTH_HRS=24
-DEFAULT_DISPATCH_RESOLUTION=0.5
-DEFAULT_DISPATCH_FREQ_MINS=30
-DEFAULT_MIN_REWARD_SCALE=-5000
-DEFAULT_NUM_GEN=5
-DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 0
-DEFAULT_STARTUP_MULTIPLIER=1
-
-DEFAULT_ARMA_PARAMS={"p":5,
-                     "q":5,   
-                     "alphas_demand":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
-                     "alphas_wind":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
-                     "betas_demand":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
-                     "betas_wind":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
-                     "sigma_demand":10,
-                     "sigma_wind":6}
-
-class NStepARMA(object):
-    """
-    ARMA(N,N) process. May be used for demand or wind. 
-    """
-    def __init__(self, p, q, alphas, betas, sigma, name):
-        self.p=p
-        self.q=q
-        self.alphas=alphas
-        self.betas=betas
-        self.name=name
-        self.sigma=sigma
-        self.xs=np.zeros(p) # last N errors
-        self.zs=np.zeros(q) # last N white noise samples
-
-    def sample_error(self):
-        zt = np.random.normal(0, self.sigma)
-        xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
-        return xt, zt
-
-    def step(self, errors=None):
-        """
-        Step forward the arma process. Can take errors, a (xt, zt) tuple to move this forward deterministically. 
-        """
-        if errors is not None:
-            xt, zt = errors # If seeding
-        else:
-            xt, zt = self.sample_error()
-        self.xs = np.roll(self.xs, 1)
-        self.zs = np.roll(self.zs, 1)
-        if self.p>0:
-            self.xs[0] = xt
-        if self.q>0:
-            self.zs[0] = zt
-
-        return xt
-    
-    def reset(self):
-        self.xs = np.zeros(self.p)
-        self.zs = np.zeros(self.q)
+from gym import spaces
+import gym
 
 def update_cost_coefs(gen_info, usd_per_kgco2):
     factor = (gen_info.kgco2_per_mmbtu / gen_info.usd_per_mmbtu) * usd_per_kgco2
@@ -75,15 +21,17 @@ def update_cost_coefs(gen_info, usd_per_kgco2):
     gen_info.b *= (1 + factor)
     gen_info.c *= (1 + factor)
 
-class UCEnv(object):
+class UCEnv(gym.Env):
     """ 
     Simulation environment for the UC problem.
 
     Methods include calculating costs of actions; advancing grid in response to actions. 
     """
+    metadata = {'render.modes': ['human']}
     def __init__(self, gen_info, profiles_df,
-                 mode='train', **kwargs):
-
+                 mode='train', test_day=-1, **kwargs):
+        super(UCEnv, self).__init__()
+        
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
         self.profiles_df = profiles_df
@@ -92,11 +40,8 @@ class UCEnv(object):
         self.dispatch_freq_mins = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
-        if self.mode == 'test':
-            self.episode_length = len(self.profiles_df)
-        else:
-            self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
-            self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
+        self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
+        self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
 
         # Set up the ARMA processes.
         arma_params = kwargs.get('arma_params', DEFAULT_ARMA_PARAMS)
@@ -192,6 +137,124 @@ class UCEnv(object):
         self.curtailment_factor = kwargs.get('curtailment_factor', 0.)
 
         self.action_size = self.num_gen + int(self.curtailment)
+        
+        # define action space - int for each generator, 0 or 1
+        self.action_space = spaces.Box(low=0, high=1, shape=(self.action_size,), dtype=np.int16)
+        
+        # define observation space
+        self.observation_space = spaces.Dict({
+            'status': spaces.Box(low=-100, high=100, shape=(self.num_gen,), dtype=np.float32),
+            'demand_forecast': spaces.Box(low=-10000, high=10000, shape=(48,), dtype=np.float32),
+            'demand_errors': spaces.Box(low=-10000, high=10000, shape=(5,), dtype=np.float32),
+            'wind_forecast': spaces.Box(low=-10000, high=10000, shape=(48,), dtype=np.float32),
+            'wind_errors': spaces.Box(low=-10000, high=10000, shape=(5,), dtype=np.float32),
+            'timestep': spaces.Discrete(48)
+        })
+        
+        self.test_day = test_day
+    
+    def step(self, action, deterministic=False, errors=None):
+        """
+        Advance the environment forward 1 timestep, returning an observation, the reward
+        and whether the s_{t+1} is terminal. 
+        """
+        obs = self._transition(action, deterministic, errors) # Advance the environment, return an observation 
+        reward = self._get_reward() # Evaluate the reward function 
+        done = self.is_terminal() # Determine if state is terminal
+        info = {} # Additional information
+
+        return obs, reward, done, info
+    
+    def reset(self):
+        """
+        Returns an initial observation. 
+        
+        - Set episode timestep to 0. 
+        - Choose a random hour to start the episode
+        - Reset generator statuses
+        - Determine constraints
+        """
+        if self.mode == 'train':
+            # Choose random day
+            day, day_profile = self.sample_day()
+            self.day = day
+            self.episode_forecast = day_profile.demand.values
+            self.episode_wind_forecast = day_profile.wind.values
+
+        else:
+            day, day_profile = self.get_test_day(self.test_day)
+            self.day = day
+            self.episode_forecast = day_profile.demand.values
+            self.episode_wind_forecast = day_profile.wind.values
+        
+        # Resetting episode variables
+        self.episode_timestep = 0
+        self.forecast = None
+        self.net_demand = None
+        self.day_cost = 0
+        
+        # Reset ARMAs 
+        self.arma_demand.reset()
+        self.arma_wind.reset()
+        
+        # Initalise grid status and constraints
+        if self.mode == "train": 
+            min_max = np.array([-self.t_min_down, self.t_min_up]).transpose()
+            self.status = np.array([x[np.random.randint(2)] for x in min_max])
+        else:
+            self.status = self.gen_info['status'].to_numpy()
+
+        self.commitment = np.where(self.status > 0, 1, 0)
+        self._determine_constraints()
+        
+        # Initialise cost and ENS
+        self.expected_cost = 0
+        self.ens = False
+
+        # Assign state
+        state = self._get_state()
+
+        self._reset_availability()
+        
+        return state
+    
+    def economic_dispatch(self, action, demand, lambda_lo, lambda_hi):
+        """Calcuate economic dispatch using lambda iteration.
+        
+        Args:
+            action (numpy array): on/off commands
+            lambda_lo (float): initial lower lambda value
+            lambda_hi (float): initial upper lambda value
+            
+        """
+        idx = np.where(np.array(action) == 1)[0]
+        on_a = self.a[idx]
+        on_b = self.b[idx]
+        on_min = self.min_output[idx]
+        on_max = self.max_output[idx]
+        disp = np.zeros(self.num_gen)
+        if np.sum(on_max) < demand:
+            econ = on_max
+        elif np.sum(on_min) > demand:
+            econ = on_min
+        else:
+            econ = lambda_iteration(demand, lambda_lo,
+                                             lambda_hi, on_a, on_b,
+                                             on_min, on_max, self.dispatch_tolerance)
+        disp[idx] = econ
+            
+        return disp
+    
+    def render(self, mode='human'):
+        """
+        Renders the environment. 
+        """
+        print("Episode timestep: {}".format(self.episode_timestep))
+        print("Day: {}".format(self.day))
+        print("Forecast: {}".format(self.forecast))
+        print("Net demand: {}".format(self.net_demand))
+        print("Commitment: {}".format(self.commitment))
+        print("Status: {}".format(self.status))
 
 
     def _reset_availability(self):
@@ -299,10 +362,9 @@ class UCEnv(object):
         """
         Roll forecasts forward by one timestep
         """
-        self.episode_timestep += 1 
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
-        self.demand_forecast = self.forecast
+        self.episode_timestep += 1 
 
     def calculate_lost_load_cost(self, net_demand, disp, availability=None):
 
@@ -395,17 +457,6 @@ class UCEnv(object):
         state = self._get_state()
 
         return state
-
-    def step(self, action, deterministic=False, errors=None):
-        """
-        Advance the environment forward 1 timestep, returning an observation, the reward
-        and whether the s_{t+1} is terminal. 
-        """
-        obs = self._transition(action, deterministic, errors) # Advance the environment, return an observation 
-        reward = self._get_reward() # Evaluate the reward function 
-        done = self.is_terminal() # Determine if state is terminal
-
-        return obs, reward, done, {}
         
     def update_gen_status(self, action):
         """Subroutine updating generator statuses.""" 
@@ -423,33 +474,6 @@ class UCEnv(object):
                 else:
                     return (status - 1)
         self.status = np.array([single_update(self.status[i], action[i]) for i in range(len(self.status))])
-        
-    def economic_dispatch(self, action, demand, lambda_lo, lambda_hi):
-        """Calcuate economic dispatch using lambda iteration.
-        
-        Args:
-            action (numpy array): on/off commands
-            lambda_lo (float): initial lower lambda value
-            lambda_hi (float): initial upper lambda value
-            
-        """
-        idx = np.where(np.array(action) == 1)[0]
-        on_a = self.a[idx]
-        on_b = self.b[idx]
-        on_min = self.min_output[idx]
-        on_max = self.max_output[idx]
-        disp = np.zeros(self.num_gen)
-        if np.sum(on_max) < demand:
-            econ = on_max
-        elif np.sum(on_min) > demand:
-            econ = on_min
-        else:
-            econ = lambda_iteration(demand, lambda_lo,
-                                             lambda_hi, on_a, on_b,
-                                             on_min, on_max, self.dispatch_tolerance)
-        disp[idx] = econ
-            
-        return disp
 
     def _generator_fuel_costs(self, output, commitment):
         costs = np.multiply(self.a, np.square(output)) + np.multiply(self.b, output) + self.c
@@ -555,9 +579,9 @@ class UCEnv(object):
         When testing, terminal states only occur at the end of the episode. 
         """
         if self.mode == "train":
-            return (self.episode_timestep == (self.episode_length-1)) or self.ens
+            return (self.episode_timestep == self.episode_length) or self.ens
         else: 
-            return self.episode_timestep == (self.episode_length-1)
+            return self.episode_timestep == self.episode_length
 
     def sample_day(self):
         """Sample a random day from self.profiles_df"""
@@ -565,56 +589,11 @@ class UCEnv(object):
         day_profile = self.profiles_df[self.profiles_df.date == day.item()]
         return day, day_profile
     
-    def reset(self):
-        """
-        Returns an initial observation. 
+    def get_test_day(self, day):
+        day = self.profiles_df.date.unique()[day]
+        day_profile = self.profiles_df[self.profiles_df.date == day]
+        return day, day_profile
         
-        - Set episode timestep to 0. 
-        - Choose a random hour to start the episode
-        - Reset generator statuses
-        - Determine constraints
-        """
-        if self.mode == 'train':
-            # Choose random day
-            day, day_profile = self.sample_day()
-            self.day = day
-            self.episode_forecast = day_profile.demand.values
-            self.episode_wind_forecast = day_profile.wind.values
-
-        else:
-            self.episode_forecast = self.profiles_df.demand.values
-            self.episode_wind_forecast = self.profiles_df.wind.values
-        
-        # Resetting episode variables
-        self.episode_timestep = -1
-        self.forecast = None
-        self.net_demand = None
-        self.day_cost = 0
-        
-        # Reset ARMAs 
-        self.arma_demand.reset()
-        self.arma_wind.reset()
-        
-        # Initalise grid status and constraints
-        if self.mode == "train": 
-            min_max = np.array([-self.t_min_down, self.t_min_up]).transpose()
-            self.status = np.array([x[np.random.randint(2)] for x in min_max])
-        else:
-            self.status = self.gen_info['status'].to_numpy()
-
-        self.commitment = np.where(self.status > 0, 1, 0)
-        self._determine_constraints()
-        
-        # Initialise cost and ENS
-        self.expected_cost = 0
-        self.ens = False
-
-        # Assign state
-        state = self._get_state()
-
-        self._reset_availability()
-        
-        return state
     
 def create_gen_info(num_gen, dispatch_freq_mins):
     """
@@ -711,7 +690,7 @@ def make_env(mode='train', profiles_df=None, **params):
     
     return env
 
-def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
+def make_env_from_json(env_name='5gen', mode='train', day=-1, profiles_df=None):
     """
     Create an environment instance using parameters set in a .json file 
     """
@@ -728,11 +707,14 @@ def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
         profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
         profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
-    if mode == 'test' and profiles_df is None:
-        raise ValueError("Must supply demand and wind profiles for testing")
+    if mode == 'test':
+        if profiles_df is None:
+            profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN_TEST))
+    # if mode == 'test' and profiles_df is None:
+    #     raise ValueError("Must supply demand and wind profiles for testing")
 
     # Create environment object
-    env = UCEnv(gen_info=gen_info, profiles_df=profiles_df, mode=mode, **params)
+    env = UCEnv(gen_info=gen_info, profiles_df=profiles_df, mode=mode, test_day=day, **params)
     env.reset()
     
     return env
