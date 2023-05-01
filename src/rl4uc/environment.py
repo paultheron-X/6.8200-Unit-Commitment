@@ -7,7 +7,7 @@ import json
 from scipy.stats import weibull_min, exponweib
 
 from .dispatch import lambda_iteration
-from helpers import NStepARMA, update_cost_coefs
+from .helpers import NStepARMA, update_cost_coefs
 
 from .constants import (
     DEFAULT_EPISODE_LENGTH_HRS,

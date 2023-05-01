@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-EPOCH_SAVE_INTERVAL = 10000
-
-from rl4uc.environment import make_env, make_env_from_json
-import torch
-from torch.optim.lr_scheduler import LambdaLR
-import torch.optim as optim
-import torch.multiprocessing as mp
-from agents import helpers
-mp.set_start_method('spawn', force=True)
-
-from agents.ppo_async.ac_agent import ACAgent
-from agents.agent_training_logger import NewLogger, Logger
 
 import numpy as np
-import os
 import time
+import copy
+from collections import namedtuple
+import pandas as pd 
+import os
+
+import torch
+import torch.optim as optim
+import torch.multiprocessing as mp
+from torch.optim.lr_scheduler import LambdaLR
 
 
-def save_ac(save_dir, ac, epoch):
-    torch.save(ac.state_dict(), os.path.join(save_dir, 'ac_' + str(epoch.item()) + '.pt'))
+from agents.ppo_async.ac_agent import ACAgent
+from agents import helpers
+from agents.agent_training_logger import Logger, NewLogger
+from agents.helpers import discount_cumsum
+
+from rl4uc.environment import make_env, make_env_from_json
+
+device = "cpu"
+mp.set_start_method('spawn', True)
+
+MsgUpdateRequest = namedtuple('MsgUpdateRequest', ['agent', 'update'])
 
 def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter):
     obs = env.reset()
@@ -92,16 +97,14 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
 
         done = False
             
-    
+    log(save_dir, rewards, timesteps, mean_entropy, loss_v, explained_variance)
     if epoch_counter % EPOCH_SAVE_INTERVAL == 0:
         print("---------------------------")
         print("saving actor critic weights")
         print("---------------------------")
         save_ac(save_dir, shared_ac, epoch_counter) 
-    
-    return rewards, timesteps
 
-def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params, params, logger, worker_id):
+def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params, params):
     """
     Training with a single worker. 
     
@@ -115,10 +118,6 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params,
     pi_optimizer = optim.Adam(shared_ac.parameters(), lr=params.get('ac_learning_rate'))
     v_optimizer = optim.Adam(shared_ac.parameters(), lr=params.get('cr_learning_rate'))
     
-    # Scheduler for learning rates
-#     lambda_lr = lambda epoch: (num_epochs - epoch_counter).item()/num_epochs
-#     pi_scheduler = LambdaLR(pi_optimizer, lr_lambda=lambda_lr)
-#     v_scheduler = LambdaLR(v_optimizer, lr_lambda=lambda_lr)
 
     np.random.seed(params.get('seed') + rank)
     env = make_env(**env_params)
@@ -146,22 +145,151 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params,
         local_ac.load_state_dict(shared_ac.state_dict())
                 
         # Run an epoch, including updating the shared network
-        rewards, timesteps = run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter)
-        
-        logger.store('mean_reward', np.mean(rewards), epoch_counter, int(worker_id))
-        logger.store('std_reward', np.std(rewards), epoch_counter, int(worker_id))
-        logger.store('q25_reward', np.quantile(rewards, 0.25), epoch_counter, int(worker_id))
-        logger.store('q75_reward', np.quantile(rewards, 0.75), epoch_counter, int(worker_id))
-        logger.store('mean_timesteps', np.mean(timesteps), epoch_counter, int(worker_id))
-        logger.store('std_timesteps', np.std(timesteps), epoch_counter, int(worker_id))
-        logger.store('q25_timesteps', np.quantile(timesteps, 0.25), epoch_counter, int(worker_id))
-        logger.store('q75_timesteps', np.quantile(timesteps, 0.75), epoch_counter, int(worker_id))
-
+        run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter)
     
     # Record time taken
     time_taken = time.time() - start_time
     with open(os.path.join(save_dir, 'time_taken.txt'), 'w') as f:
         f.write(str(time_taken) + '\n')
+        
+def train(save_dir,
+		timesteps, 
+	    num_workers, 
+		steps_per_epoch, 
+		env_params, 
+		policy_params,
+        args
+    ):
+    
+    epoch_counter = torch.tensor([0])
+    epoch_counter.share_memory_()
+    num_epochs = int(timesteps / steps_per_epoch)
+    
+    # initialise environment and the shared networks 
+    # env = make_env(**env_params)
+    env = make_env_from_json(args.env_name)
+    policy = ACAgent(env, **policy_params)
+
+    if args.ac_weights_fn is not None:
+        print("********************Using pre-trained AC weights***********************")
+        policy.load_state_dict(torch.load(args.ac_weights_fn))
+
+    policy.train()
+    policy.share_memory()
+
+	# Total number of epochs (updates)
+
+	# Number of timesteps each worker should gather per epoch
+    worker_steps_per_epoch = int(steps_per_epoch / num_workers)
+
+    #pi_optimizer = optim.Adam(policy.parameters(), lr=policy_params.get('ac_learning_rate'))
+    #v_optimizer = optim.Adam(policy.parameters(), lr=policy_params.get('cr_learning_rate'))
+
+    # The actor buffer will typically take more entries than the critic buffer,
+    # because it records sub-actions. Hence there is usually more than one entry
+    # per timestep. Here we set the size to be the max possible.
+
+    log_keys = ('mean_reward', 'std_reward', 'q25_reward', 'q75_reward',
+        'mean_timesteps', 'std_timesteps', 'q25_timesteps', 'q75_timesteps', 'entropy')
+    logger = NewLogger(num_epochs, num_workers, steps_per_epoch, *log_keys)
+
+
+    # Worker update requests
+    update_request = [False]*num_workers
+    epoch_counter = 0
+
+    workers = []
+    pipes = []
+
+    for worker_id in range(num_workers):
+        p_start, p_end = mp.Pipe()
+        worker = Worker(worker_id=str(worker_id),env=env,policy=policy,pipe=p_end,logger=logger,num_epochs=num_epochs,steps_per_epoch=worker_steps_per_epoch)
+        worker.start()
+        workers.append(worker)
+        pipes.append(p_start)
+
+    start_time = time.time()
+
+	# starting training loop
+    while epoch_counter < num_epochs:
+        for i, conn in enumerate(pipes):
+            if conn.poll():
+                msg = conn.recv()
+
+                # if agent is waiting for network update
+                if type(msg).__name__ == "MsgUpdateRequest":
+                    update_request[i] = True
+                    if False not in update_request:
+
+                        print("Epoch: {}".format(epoch_counter))
+                        print("Updating")
+
+
+                        entropy, loss_v, explained_variance = policy.update(actor_buf, critic_buf, pi_optimizer, v_optimizer)
+                        print("Entropy: {}".format(entropy.mean()))
+                        for w in range(num_workers):
+                            logger.store('entropy', entropy.mean().detach(), epoch_counter, w)
+
+                        epoch_counter += 1
+                        update_request = [False]*num_workers
+                        msg = epoch_counter
+
+                        # periodically save the logs
+                        if (epoch_counter + 1) % 10 == 0:
+                            logger.save_to_csv(os.path.join(save_dir, 'logs.csv'))
+
+						# send to signal subprocesses to continue
+                        for pipe in pipes:
+                            pipe.send(msg)
+
+    time_taken = time.time() - start_time
+
+    logger.save_to_csv(os.path.join(save_dir, 'logs.csv'))
+    torch.save(policy.state_dict(), os.path.join(save_dir, 'ac_final.pt'))
+
+    # Record training time
+    with open(os.path.join(save_dir, 'time_taken.txt'), 'w') as f:
+        f.write(str(time_taken) + '\n')
+        
+        
+class Worker(mp.Process):
+    def __init__(self, worker_id, env, pipe, policy, gamma, lam, 
+                num_epochs, steps_per_epoch, logger):
+
+        mp.Process.__init__(self, name=worker_id)
+
+        self.worker_id = worker_id
+        self.policy = policy
+        self.env = copy.deepcopy(env)
+        self.gamma = gamma
+        self.lam = lam
+        self.pipe = pipe
+        self.num_epochs = num_epochs
+        self.steps_per_epoch = steps_per_epoch
+        self.logger = logger
+  
+    def run(self):
+        for epoch in range(self.num_epochs):
+            all_ep_rewards, all_ep_timesteps = self.run_epoch()
+
+            self.logger.store('mean_reward', np.mean(all_ep_rewards), epoch, int(self.worker_id))
+            self.logger.store('std_reward', np.std(all_ep_rewards), epoch, int(self.worker_id))
+            self.logger.store('q25_reward', np.quantile(all_ep_rewards, 0.25), epoch, int(self.worker_id))
+            self.logger.store('q75_reward', np.quantile(all_ep_rewards, 0.75), epoch, int(self.worker_id))
+            self.logger.store('mean_timesteps', np.mean(all_ep_timesteps), epoch, int(self.worker_id))
+            self.logger.store('std_timesteps', np.std(all_ep_timesteps), epoch, int(self.worker_id))
+            self.logger.store('q25_timesteps', np.quantile(all_ep_timesteps, 0.25), epoch, int(self.worker_id))
+            self.logger.store('q75_timesteps', np.quantile(all_ep_timesteps, 0.75), epoch, int(self.worker_id))
+
+            msg = MsgUpdateRequest(int(self.worker_id), True)
+            self.pipe.send(msg)
+            msg = self.pipe.recv()
+   
+    def run_epoch(self):
+        pass
+
+
+   
         
 if __name__ == "__main__":
     
@@ -171,12 +299,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train PPO agent')
     parser.add_argument('--save_dir', type=str, required=True)
     parser.add_argument('--workers', type=int, required=False, default=1)
+    parser.add_argument('--env_name', type=str, required=True)
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--buffer_size', type=int, required=False, default=2000)
     parser.add_argument('--seed', type=int, required=False, default=np.random.randint(1000000))
-    parser.add_argument('--steps_per_epoch', type=int, required=False, default=1000)
     parser.add_argument('--num_gen', type=int, required=True)
     parser.add_argument('--timesteps', type=int, required=True)
+    parser.add_argument('--steps_per_epoch', type=int, required=True)
 
 
     # The following params will be used to setup the PPO agent
@@ -204,54 +333,28 @@ if __name__ == "__main__":
     os.makedirs(args.save_dir, exist_ok=True)
 
     # Load policy params and save them to the local directory. 
-    params = vars(args)
+    policy_params = vars(args)
     with open(os.path.join(args.save_dir, 'params.json'), 'w') as fp:
-        fp.write(json.dumps(params, sort_keys=True, indent=4))
-
-    # If training using a pre-defined AC networks --> overwrite archs
-    if args.ac_params_fn is not None:
-        ac_params = json.load(open(args.ac_params_fn))
-        params.update({'ac_arch': ac_params['ac_arch'], 'cr_arch': ac_params['cr_arch']})
-    
-    params.update({'env_fn': f'src/rl4uc/data/envs/{args.num_gen}gen.json', 'env_name': f'{args.num_gen}gen'})
+        fp.write(json.dumps(policy_params, sort_keys=True, indent=4))
     
     # Load the env params and save them to save_dir
     env_params = helpers.retrieve_env_params(args.num_gen)
     with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as fp:
         fp.write(json.dumps(env_params, sort_keys=True, indent=4))
     
-
-    epoch_counter = torch.tensor([0])
-    epoch_counter.share_memory_()
-        
+    # If training using a pre-defined AC networks --> overwrite archs
+    if args.ac_params_fn is not None:
+        ac_params = json.load(open(args.ac_params_fn))
+        policy_params.update({'ac_arch': ac_params['ac_arch'], 'cr_arch': ac_params['cr_arch']})
+    
     # Check if cuda is available:
     if torch.cuda.is_available():
          torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    
-    # initialise environment and the shared networks 
-    # env = make_env(**env_params)
-    env = make_env_from_json(f'{args.num_gen}gen')
-    shared_ac = ACAgent(env, **params)
 
-    if args.ac_weights_fn is not None:
-        print("********************Using pre-trained AC weights***********************")
-        shared_ac.load_state_dict(torch.load(args.ac_weights_fn))
-
-    shared_ac.train()
-    shared_ac.share_memory()
-    
-    log_keys = ('mean_reward', 'std_reward', 'q25_reward', 'q75_reward',
-                'mean_timesteps', 'std_timesteps', 'q25_timesteps', 'q75_timesteps', 'entropy')
-    logger = NewLogger(args.epochs, args.workers, args.steps_per_epoch, *log_keys)
-
-    processes = []
-    for rank in range(args.workers):
-        p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.epochs, shared_ac, epoch_counter, env_params, params, logger, rank))
-        # p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.epochs, shared_ac, epoch_counter, params))
-        p.start()
-        processes.append(p)
-    for p in processes:
-        p.join()
-        
-    # Save policy network
-    torch.save(shared_ac.state_dict(), os.path.join(args.save_dir, 'ac_final.pt'))
+    train(save_dir=args.save_dir,
+		timesteps=args.timesteps,
+		num_workers=args.workers,
+		steps_per_epoch=args.steps_per_epoch,
+		env_params=env_params,
+		policy_params=policy_params,
+        args = policy_params)

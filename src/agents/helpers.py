@@ -13,6 +13,8 @@ from pathlib import Path
 import json
 
 import rl4uc.helpers as rl4uc_helpers
+import scipy.signal as signal
+
 
 def cap_states(states, gen_info):
     """
@@ -300,17 +302,17 @@ def save_branches(prof_name, save_dir, n_branches):
 
 
 def retrieve_test_problem(num_gen, prof_name):
-    fn = Path(__file__).parent / '../ts4uc_scripts/data/day_ahead/{}gen/30min/{}.csv'.format(num_gen, prof_name)
+    fn = 'data/day_ahead/{}gen/30min/{}.csv'.format(num_gen, prof_name)
     return pd.read_csv(fn)
 
 
 def retrieve_env_params(num_gen):
-    fn = Path(__file__).parent / '../ts4uc_scripts/data/day_ahead/{}gen/30min/env_params.json'.format(num_gen)
+    fn = 'data/day_ahead/{}gen/30min/env_params.json'.format(num_gen)
     return json.load(open(fn))
 
 
 def retrieve_error_scenarios(num_gen):
-    fn = Path(__file__).parent / '../ts4uc_scripts/data/error_scenarios/{}gen_scenarios.csv'.format(num_gen)
+    fn = 'data/error_scenarios/{}gen_scenarios.csv'.format(num_gen)
     return pd.read_csv(fn)
 
 def mean_std_reward(env, N=10000):
@@ -326,3 +328,9 @@ def mean_std_reward(env, N=10000):
             env.reset()
     env.reset()
     return np.mean(rewards), np.std(rewards)
+
+def discount_cumsum(x, discount):
+	"""
+	Calculate discounted cumulative sum, from SpinningUp repo.
+	"""
+	return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]

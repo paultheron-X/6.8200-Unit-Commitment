@@ -11,7 +11,7 @@ import torch.optim as optim
 import torch.multiprocessing as mp
 mp.set_start_method('spawn', force=True)
 
-from ts4uc.agents.a3c.a3c import A3CAgent
+from agents.a3c.a3c import A3CAgent
 from agents import helpers
 
 import numpy as np
