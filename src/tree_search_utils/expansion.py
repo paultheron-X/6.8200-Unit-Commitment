@@ -5,8 +5,8 @@ import numpy as np
 import copy
 import itertools
 
-from ts4uc.tree_search import scenarios
-from ts4uc.tree_search.node import Node
+from tree_search_utils import scenarios
+from tree_search_utils.node import Node
 
 def get_actions(node, policy, **policy_kwargs):
     """Wrapper function for get actions with policy (guided search) or without (unguided)"""

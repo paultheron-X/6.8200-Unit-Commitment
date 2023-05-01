@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from ts4uc.tree_search import scenarios, expansion, informed_search
-from ts4uc.tree_search import node as node_mod
+from tree_search_utils import scenarios, expansion, informed_search
+from tree_search_utils import node as node_mod
 from rl4uc.environment import make_env
-from ts4uc.tree_search.mcts.node import DecisionNode, DummyNode
+from tree_search_utils.mcts.node import DecisionNode, DummyNode
 
 
 import numpy as np

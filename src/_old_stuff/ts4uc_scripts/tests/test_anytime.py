@@ -1,5 +1,5 @@
 from rl4uc.environment import make_env
-from ts4uc.tree_search import anytime
+from tree_search_utils import anytime
 
 import numpy as np 
 import pandas as pd 

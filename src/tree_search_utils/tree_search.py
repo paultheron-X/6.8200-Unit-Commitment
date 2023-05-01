@@ -3,7 +3,7 @@
 
 from scenarios import get_scenarios, calculate_expected_costs
 from rl4uc.environment import make_env
-from ts4uc.tree_search.mcts.node import DecisionNode, DummyNode
+from tree_search_utils.mcts.node import DecisionNode, DummyNode
 import agents.helpers as helpers
 
 

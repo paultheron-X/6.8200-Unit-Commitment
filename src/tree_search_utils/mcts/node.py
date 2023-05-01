@@ -15,7 +15,7 @@ import os
 import itertools
 from scipy.spatial import ConvexHull, distance_matrix  
 
-from ts4uc.tree_search.mcts.priority_list import run_PL_new, run_PL_new2, run_PL_new3
+from tree_search_utils.mcts.priority_list import run_PL_new, run_PL_new2, run_PL_new3
 
 EXPANSION_SEED=2
 

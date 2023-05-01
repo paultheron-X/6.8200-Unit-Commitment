@@ -19,7 +19,7 @@ heuristic_method=${9:-none}
 number=$SGE_TASK_ID
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 
-python src/ts4uc/tree_search/day_ahead.py --save_dir $save_dir \
+python src/tree_search_utils/day_ahead.py --save_dir $save_dir \
 												  --policy_params_fn $params_filename \
 												  --env_params_fn $env_params_filename \
 												  --test_data $testfile \

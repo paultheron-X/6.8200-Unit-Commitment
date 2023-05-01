@@ -7,9 +7,9 @@ sys.path.append('src')
 
 from rl4uc.environment import make_env
 
-from ts4uc.tree_search.scenarios import get_net_demand_scenarios, get_scenarios
-from ts4uc.tree_search.day_ahead import solve_day_ahead
-from ts4uc.tree_search.algos import uniform_cost_search
+from tree_search_utils.scenarios import get_net_demand_scenarios, get_scenarios
+from tree_search_utils.day_ahead import solve_day_ahead
+from tree_search_utils.algos import uniform_cost_search
 from ts4uc.agents.ppo_async.ac_agent import ACAgent
 import agents.helpers as helpers
 

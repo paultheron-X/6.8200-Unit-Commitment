@@ -13,10 +13,10 @@ import random
 
 from rl4uc.environment import make_env
 
-from ts4uc.tree_search import node as node_mod, expansion, informed_search, scenarios
-from ts4uc.tree_search.anytime import ida_star
+from tree_search_utils import node as node_mod, expansion, informed_search, scenarios
+from tree_search_utils.anytime import ida_star
 from agents import helpers
-from ts4uc.agents.ppo_async.ac_agent import ACAgent
+from agents.ppo_async.ac_agent import ACAgent
 
 def solve_rolling_anytime(env,
                           time_budget,
