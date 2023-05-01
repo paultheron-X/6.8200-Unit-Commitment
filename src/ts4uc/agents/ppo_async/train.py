@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 EPOCH_SAVE_INTERVAL = 10000
 
-from rl4uc.environment import make_env
+from rl4uc.environment import make_env, make_env_from_json
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 import torch.optim as optim
@@ -147,7 +147,8 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params,
     while epoch_counter < num_epochs:
         
         epoch_counter += 1 
-        print("Epoch: {}".format(epoch_counter.item()))
+        if epoch_counter % 1000 == 0:
+            print("Epoch: {}".format(epoch_counter.item()))
 
         # If using target entropy, then schedule
         if params.get('entropy_target', 0) != 0:
@@ -179,6 +180,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train PPO agent')
     parser.add_argument('--save_dir', type=str, required=True)
     parser.add_argument('--workers', type=int, required=False, default=1)
+    parser.add_argument('--env_name', type=str, required=True)
     parser.add_argument('--env_fn', type=str, required=True)
     parser.add_argument('--epochs', type=int, required=True)
     parser.add_argument('--buffer_size', type=int, required=False, default=2000)
@@ -242,7 +244,8 @@ if __name__ == "__main__":
          torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
     # initialise environment and the shared networks 
-    env = make_env(**env_params)
+    # env = make_env(**env_params)
+    env = make_env_from_json(args.env_name)
     shared_ac = ACAgent(env, **params)
 
     if args.ac_weights_fn is not None:
@@ -256,6 +259,7 @@ if __name__ == "__main__":
     processes = []
     for rank in range(args.workers):
         p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.epochs, shared_ac, epoch_counter, env_params, params))
+        # p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.epochs, shared_ac, epoch_counter, params))
         p.start()
         processes.append(p)
     for p in processes:
