@@ -7,7 +7,7 @@ from rl4uc.environment import make_env
 
 from agents import helpers
 
-from ts4uc.agents.ppo_async.ac_agent import ACAgent
+from agents.ppo_async.ac_agent import ACAgent
 
 import numpy as np
 import argparse 

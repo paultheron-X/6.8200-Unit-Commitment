@@ -76,3 +76,9 @@ class NStepARMA(object):
     def reset(self):
         self.xs = np.zeros(self.p)
         self.zs = np.zeros(self.q)
+
+def update_cost_coefs(gen_info, usd_per_kgco2):
+    factor = (gen_info.kgco2_per_mmbtu / gen_info.usd_per_mmbtu) * usd_per_kgco2
+    gen_info.a *= (1 + factor)
+    gen_info.b *= (1 + factor)
+    gen_info.c *= (1 + factor)

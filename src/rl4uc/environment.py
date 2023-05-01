@@ -7,73 +7,17 @@ import json
 from scipy.stats import weibull_min, exponweib
 
 from .dispatch import lambda_iteration
+from helpers import NStepARMA, update_cost_coefs
 
-
-DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
-
-DEFAULT_VOLL=10000
-DEFAULT_EPISODE_LENGTH_HRS=24
-DEFAULT_DISPATCH_RESOLUTION=0.5
-DEFAULT_DISPATCH_FREQ_MINS=30
-DEFAULT_MIN_REWARD_SCALE=-5000
-DEFAULT_NUM_GEN=5
-DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 0
-DEFAULT_STARTUP_MULTIPLIER=1
-
-DEFAULT_ARMA_PARAMS={"p":5,
-                     "q":5,   
-                     "alphas_demand":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
-                     "alphas_wind":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
-                     "betas_demand":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
-                     "betas_wind":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
-                     "sigma_demand":10,
-                     "sigma_wind":6}
-
-class NStepARMA(object):
-    """
-    ARMA(N,N) process. May be used for demand or wind. 
-    """
-    def __init__(self, p, q, alphas, betas, sigma, name):
-        self.p=p
-        self.q=q
-        self.alphas=alphas
-        self.betas=betas
-        self.name=name
-        self.sigma=sigma
-        self.xs=np.zeros(p) # last N errors
-        self.zs=np.zeros(q) # last N white noise samples
-
-    def sample_error(self):
-        zt = np.random.normal(0, self.sigma)
-        xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
-        return xt, zt
-
-    def step(self, errors=None):
-        """
-        Step forward the arma process. Can take errors, a (xt, zt) tuple to move this forward deterministically. 
-        """
-        if errors is not None:
-            xt, zt = errors # If seeding
-        else:
-            xt, zt = self.sample_error()
-        self.xs = np.roll(self.xs, 1)
-        self.zs = np.roll(self.zs, 1)
-        if self.p>0:
-            self.xs[0] = xt
-        if self.q>0:
-            self.zs[0] = zt
-
-        return xt
-    
-    def reset(self):
-        self.xs = np.zeros(self.p)
-        self.zs = np.zeros(self.q)
-
-def update_cost_coefs(gen_info, usd_per_kgco2):
-    factor = (gen_info.kgco2_per_mmbtu / gen_info.usd_per_mmbtu) * usd_per_kgco2
-    gen_info.a *= (1 + factor)
-    gen_info.b *= (1 + factor)
-    gen_info.c *= (1 + factor)
+from .constants import (
+    DEFAULT_EPISODE_LENGTH_HRS,
+    DEFAULT_DISPATCH_FREQ_MINS,
+    DEFAULT_VOLL,
+    DEFAULT_ARMA_PARAMS,
+    DEFAULT_MIN_REWARD_SCALE,
+    DEFAULT_PROFILES_FN,
+    DEFAULT_NUM_GEN,
+)
 
 class UCEnv(object):
     """ 
