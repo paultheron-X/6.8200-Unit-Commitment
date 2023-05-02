@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -64,17 +65,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train Q-Learning agent')
     parser.add_argument('--save_dir', type=str, required=True)
     parser.add_argument('--env_name', type=str, required=True)
+    parser.add_argument('--env_fn', type=str, required=True)
     parser.add_argument('--nb_epochs', type=int, required=True)
 
     args = parser.parse_args()
 
-    agent, log = train(
+    qagent, log = train(
         save_dir = args.save_dir,
         env_name = args.env_name,
         nb_epochs = args.nb_epochs
         )
     
-    pd.Series(log['mean_reward']).rolling(50).mean().plot()
+    # save logs
+    os.makedirs(args.save_dir, exist_ok=True)
+    env_params = json.load(open(args.env_fn))
+    with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as f:
+        f.write(json.dumps(env_params, sort_keys=True, indent=4))
+    with open(args.save_dir + '/log.json', 'w') as f:
+        json.dump(log, f)
+        
+    # save agent 
+    torch.save(qagent.state_dict(), os.path.join(args.save_dir, 'qagent_final.pt'))
     
     
  

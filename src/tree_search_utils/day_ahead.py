@@ -8,6 +8,8 @@ from agents import helpers
 
 from tree_search_utils.scenarios import get_net_demand_scenarios, get_scenarios, get_global_outage_scenarios
 from agents.ppo_async.ac_agent import ACAgent
+from agents.qlearning.qagent import QAgent
+
 from tree_search_utils.algos import uniform_cost_search, a_star, rta_star, brute_force
 
 import numpy as np
@@ -100,6 +102,9 @@ if __name__ == "__main__":
                         help='Heuristic method to use (when using A* or its variants)')
 
     args = parser.parse_args()
+    
+    agent_type = args.policy_filename.split('/')[2]
+    print(agent_type)
 
     if args.branching_threshold == -1:
         args.branching_threshold = None
@@ -154,7 +159,12 @@ if __name__ == "__main__":
 
     # Load policy 
     if args.policy_filename is not None:
-        policy = ACAgent(env, test_seed=args.seed, **policy_params)
+        if agent_type == 'ppo_async':
+            policy = ACAgent(env, test_seed=args.seed, **policy_params)
+        elif agent_type == 'qlearning':
+            policy = QAgent(env, test_seed=args.seed, **policy_params)
+        else:
+            raise ValueError("Unknown agent type")
         if torch.cuda.is_available():
             policy.cuda()
         policy.load_state_dict(torch.load(args.policy_filename))        

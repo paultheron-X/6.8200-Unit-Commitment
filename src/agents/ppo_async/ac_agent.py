@@ -347,14 +347,14 @@ class ACAgent(nn.Module):
             
             # Reset one-hot encoding
             xs[:,idx] = 0
-        
+
         # Retrieve actions
         actions = xs[:,env.action_size:2*env.action_size].cpu().detach().numpy()
 
         # Get unique actions
         uniq, counts = np.unique(actions, axis=0, return_counts=True)
 
-        # Delete for memory saving  
+        # Delete for memory saving
         del xs
         del actions
 

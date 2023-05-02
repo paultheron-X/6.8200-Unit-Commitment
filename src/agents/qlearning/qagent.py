@@ -6,8 +6,9 @@ import torch.optim as optim
 from rl4uc import processor
 
 class QAgent(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, **kwargs):
         super(QAgent, self).__init__()
+        self.__dict__.update(kwargs)
         self.num_gen = env.num_gen
         
         self.forecast_horizon = 12
@@ -58,6 +59,34 @@ class QAgent(nn.Module):
         action = q_values.argmax(axis=1).detach().numpy()
         
         return action, processed_obs
+    
+    def generate_multiple_actions_batched(self, env, obs, N_samples, threshold, lower_threshold=True):
+        """
+        Function that generates N actions sequentially.
+        """
+        # Repeat obs N times
+        processed_obs = self.process_observation(obs)
+
+        q_values = self.forward(processed_obs)
+        q_values = q_values.reshape(self.num_gen, 2)
+        action = q_values.argmax(axis=1).detach().numpy()
+        
+        q_values_softmax = nn.functional.softmax(q_values, dim=1)
+        gaps = q_values_softmax[:,1] - q_values_softmax[:,0]
+        candidates = np.where(gaps >= threshold)[0]
+
+        # Create action dictionary
+        action_dict = {}
+        for idx in candidates:
+            action_sub = np.copy(action)
+            action_sub[idx] = 1 - action[idx]
+            # Convert action to bit string
+            action_id = ''.join(str(int(i)) for i in action_sub)
+            # Convert bit string to int
+            action_id = int(action_id, 2)
+            action_dict[action_id] = action_sub
+
+        return action_dict, 0
     
     def update(self, memory, batch_size=None):
         
