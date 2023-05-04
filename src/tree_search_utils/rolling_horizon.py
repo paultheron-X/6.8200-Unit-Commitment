@@ -10,11 +10,12 @@ import torch
 import argparse
 import json
 import random
+from _old_stuff import informed_search
 
 from rl4uc.environment import make_env
 
-from tree_search_utils import node as node_mod, expansion, informed_search, scenarios
-from tree_search_utils.anytime import ida_star
+from tree_search_utils import node as node_mod, expansion, scenarios
+from agents.anytime import ida_star
 from agents import helpers
 from agents.ppo_async.ac_agent import ACAgent
 

@@ -10,11 +10,11 @@ else
     num_gen=$1
 fi
 
-python src/agents/ppo_async/train.py \
-       --save_dir results/agents/test/ppo_async/${num_gen}gen \
-       --workers 4 \
+python src/agents/ppo/train.py \
+       --save_dir results/agents/test/ppo/${num_gen}gen \
        --num_gen ${num_gen} \
        --timesteps 500000 \
+       --workers 4 \
        --steps_per_epoch 1000 \
        --entropy_coef 0.05 \
 	   --update_epochs 10 \

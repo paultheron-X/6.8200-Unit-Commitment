@@ -9,6 +9,7 @@ from agents import helpers
 from tree_search_utils.scenarios import get_net_demand_scenarios, get_scenarios, get_global_outage_scenarios
 from agents.ppo_async.ac_agent import ACAgent
 from agents.qlearning.qagent import QAgent
+from agents.ppo.ppo import PPOAgent
 
 from tree_search_utils.algos import uniform_cost_search, a_star, rta_star, brute_force
 
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     env = make_env(mode='test', profiles_df=profile_df, **env_params)
 
     # Generate scenarios for demand and wind errors
-    # scenarios = get_net_demand_scenarios(profile_df, env, args.num_scenarios)
+    scenarios = get_net_demand_scenarios(profile_df, env, args.num_scenarios)
     demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_scenarios)
     if env.outages:
         global_outage_scenarios = get_global_outage_scenarios(env, env.episode_length + env.gen_info.status.max(), args.num_scenarios)
@@ -163,6 +164,8 @@ if __name__ == "__main__":
             policy = ACAgent(env, test_seed=args.seed, **policy_params)
         elif agent_type == 'qlearning':
             policy = QAgent(env, test_seed=args.seed, **policy_params)
+        elif agent_type == 'ppo':
+            policy = PPOAgent(env, test_seed=args.seed, **policy_params)
         else:
             raise ValueError("Unknown agent type")
         if torch.cuda.is_available():
@@ -189,7 +192,11 @@ if __name__ == "__main__":
                                       policy=policy,
                                       **params)
     time_taken = time.time() - s
-
+    
+    # DEBUG: Schedule is an array of size (48, 5) with all the actions across the episode
+    
+    # Save schedule
+    #torch.save(schedule_result, os.path.join(args.save_dir, 'schedule.pt'))
     # Get distribution of costs for solution by running multiple times through environment
     TEST_SAMPLE_SEED=999
     results = helpers.test_schedule(env, schedule_result, TEST_SAMPLE_SEED, args.num_samples)
@@ -208,7 +215,14 @@ if __name__ == "__main__":
 
     print("Done")
     print()
-    print("Mean costs: ${:.2f}".format(np.mean(results['total_cost'])))
+    print("Mean costs: ${:.2f}".format(np.mean(results['total_cost'])))    
+    
+    
+    print(results['total_cost'])
+    #normalised cost by the demand of the profile
+    print("Net demand: {:.2f}MWh".format(env.net_demand.sum()))
+    print("Net demand bis", scenarios)
+    
     print("Lost load prob: {:.3f}%".format(100*np.sum(results['lost_load_events'])/(args.num_samples * env.episode_length)))
     print("Time taken: {:.2f}s".format(time_taken))
     print("Mean curtailed {:.2f}MWh".format(results.curtailed_mwh.mean()))

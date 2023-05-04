@@ -303,7 +303,7 @@ class ACAgent(nn.Module):
             else:
                 a = pi.sample()
             
-            # Update log_prob
+            a = a.to(self.device)
             log_prob = pi.log_prob(a)
             log_probs.append(log_prob)
             entropys.append(pi.entropy())
@@ -393,6 +393,12 @@ class ACAgent(nn.Module):
         obs, act, adv, logp_old = data['sub_obs'], data['act'], data['adv'], data['logp']
 
         # Policy loss
+        obs = obs.to(self.device)
+        act = act.to(self.device)
+        adv = adv.to(self.device)
+        logp_old = adv.to(self.device)
+
+        
         pi = self.forward_ac(obs)
         logp = pi.log_prob(act[:,0])
         
@@ -428,6 +434,8 @@ class ACAgent(nn.Module):
     def compute_loss_v(self, data):
         # TODO: make sure that the correct network (worker or global) is computing value 
         obs, ret = data['obs'], data['ret']
+        obs = obs.to(self.device)
+        ret = ret.to(self.device)
         pred = self.forward_cr(obs)
         explained_variance = 1 - (torch.var(ret - pred))/torch.var(ret)
         return ((pred - ret)**2).mean(), explained_variance

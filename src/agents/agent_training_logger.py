@@ -21,7 +21,7 @@ class NewLogger:
 
 		df = pd.DataFrame()
 		for key in self.log:
-			df[key] = self.log[key].numpy().mean(axis=1)
+			df[key] = self.log[key].cpu().numpy().mean(axis=1)
 		df['epoch'] = np.arange(self.num_epochs)
 		df['timestep'] = df['epoch'] * self.steps_per_epoch
 		df.to_csv(fn, index=False)

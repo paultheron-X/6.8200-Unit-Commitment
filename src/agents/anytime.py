@@ -13,10 +13,11 @@ import json
 import random
 import signal
 from multiprocessing import Pool
+from _old_stuff import informed_search
 
 from rl4uc.environment import make_env
 
-from tree_search_utils import node as node_mod, expansion, informed_search
+from tree_search_utils import node as node_mod, expansion
 from tree_search_utils.algos import a_star
 from agents import helpers
 from agents.ppo_async.ac_agent import ACAgent

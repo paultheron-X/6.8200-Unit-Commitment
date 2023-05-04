@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from tree_search_utils import scenarios, expansion, informed_search
+from _old_stuff import informed_search
+from tree_search_utils import scenarios, expansion
 from tree_search_utils import node as node_mod
 from rl4uc.environment import make_env
 from tree_search_utils.mcts.node import DecisionNode, DummyNode
