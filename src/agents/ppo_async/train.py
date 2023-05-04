@@ -57,13 +57,13 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
         # Update episode rewards and timesteps survived
         ep_reward += reward
         ep_rews.append(reward)
-        ep_vals.append(value.detach().item())
+        ep_vals.append(value.detach().cpu().item())
         ep_sub_acts.append(len(sub_acts))
         ep_timesteps += 1
 
-        local_ac.critic_buffer.store(obs_processed, reward)
+        local_ac.critic_buffer.store(obs_processed.cpu(), reward)
         for idx in range(len(sub_obs)):
-            local_ac.actor_buffer.store(sub_obs[idx], sub_acts[idx], log_probs[idx], reward, value)
+            local_ac.actor_buffer.store(sub_obs[idx].cpu(), sub_acts[idx].cpu(), log_probs[idx].cpu(), reward.cpu(), value)
 
         obs = new_obs
 
@@ -89,8 +89,8 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
                 local_ac.actor_buffer.finish_ep_new(ts=ep_sub_acts, 
                                                     ep_rews=ep_rews,
                                                     ep_vals=ep_vals,
-                                                    last_val=local_ac.get_value(obs)[0].detach().numpy())
-                local_ac.critic_buffer.finish_ep(last_val=local_ac.get_value(obs)[0].detach().numpy())
+                                                    last_val=local_ac.get_value(obs)[0].detach().cpu().numpy())
+                local_ac.critic_buffer.finish_ep(last_val=local_ac.get_value(obs)[0].detach().cpu().numpy())
 
             entropy, loss_v, explained_variance = shared_ac.update(local_ac, pi_optimizer, v_optimizer)
             mean_entropy, loss_v, explained_variance = torch.mean(entropy).item(), loss_v.item(), explained_variance.item()
