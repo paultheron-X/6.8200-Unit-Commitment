@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 results/guided_tree_search/*
-results/tmp/*
+results/tmp
+results/agents/test

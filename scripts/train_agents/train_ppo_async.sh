@@ -3,9 +3,9 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 # This traines a PPO agent for 500k timesteps
 
 python src/agents/ppo_async/train.py \
-       --save_dir results/ppo_async/ \
+       --save_dir results/agents/test/ppo_async/10gen \
        --workers 4 \
-       --num_gen 5 \
+       --num_gen 10 \
        --timesteps 500000 \
        --epochs 5000 \
        --entropy_coef 0.05 \

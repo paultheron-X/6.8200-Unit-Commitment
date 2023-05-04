@@ -255,3 +255,6 @@ if __name__ == "__main__":
         
     # Save policy network
     torch.save(shared_ac.state_dict(), os.path.join(args.save_dir, 'ac_final.pt'))
+    
+    # save the log
+    logger.save_to_csv(os.path.join(args.save_dir, 'logs.csv'))
