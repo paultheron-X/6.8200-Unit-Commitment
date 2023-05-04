@@ -21,7 +21,7 @@ import time
 def save_ac(save_dir, ac, epoch):
     torch.save(ac.state_dict(), os.path.join(save_dir, 'ac_' + str(epoch.item()) + '.pt'))
 
-def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter):
+def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter, worker_id, logger):
     obs = env.reset()
     epoch_done = False
     done = False
@@ -30,6 +30,8 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
 
     rewards = []
     timesteps = []
+    unscaled_rewards = []
+    all_ep_rewards = []
 
     while epoch_done is False:
 
@@ -44,6 +46,7 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
 
         # Simple transformation of reward
         # reward = 1+reward/-env.min_reward
+        unscaled_rewards.append(reward)
         reward = reward / -env.min_reward
         reward = np.log(-1/reward)
 
@@ -72,6 +75,9 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
             
             rewards.append(ep_reward)
             timesteps.append(ep_timesteps)
+            all_ep_rewards.append(sum(unscaled_rewards))
+            
+            unscaled_rewards = []
 
             obs = env.reset()
             ep_reward, ep_timesteps = 0,0
@@ -87,7 +93,8 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
 
             entropy, loss_v, explained_variance = shared_ac.update(local_ac, pi_optimizer, v_optimizer)
             mean_entropy, loss_v, explained_variance = torch.mean(entropy).item(), loss_v.item(), explained_variance.item()
-
+            
+            logger.store('entropy', entropy.mean().detach(), epoch_counter, worker_id)
             epoch_done = True
 
         done = False
@@ -99,7 +106,7 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
         print("---------------------------")
         save_ac(save_dir, shared_ac, epoch_counter) 
     
-    return rewards, timesteps
+    return all_ep_rewards, timesteps
 
 def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params, params, logger, worker_id):
     """
@@ -146,7 +153,7 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params,
         local_ac.load_state_dict(shared_ac.state_dict())
                 
         # Run an epoch, including updating the shared network
-        rewards, timesteps = run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter)
+        rewards, timesteps = run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epoch_counter, worker_id, logger)
         
         logger.store('mean_reward', np.mean(rewards), epoch_counter, int(worker_id))
         logger.store('std_reward', np.std(rewards), epoch_counter, int(worker_id))
@@ -156,6 +163,9 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params,
         logger.store('std_timesteps', np.std(timesteps), epoch_counter, int(worker_id))
         logger.store('q25_timesteps', np.quantile(timesteps, 0.25), epoch_counter, int(worker_id))
         logger.store('q75_timesteps', np.quantile(timesteps, 0.75), epoch_counter, int(worker_id))
+        
+        if (epoch_counter + 1) % 10 == 0:
+                logger.save_to_csv(os.path.join(save_dir, 'logs.csv'))
 
     
     # Record time taken
@@ -242,14 +252,16 @@ if __name__ == "__main__":
     
     log_keys = ('mean_reward', 'std_reward', 'q25_reward', 'q75_reward',
                 'mean_timesteps', 'std_timesteps', 'q25_timesteps', 'q75_timesteps', 'entropy')
-    logger = NewLogger(args.epochs, args.workers, args.steps_per_epoch, *log_keys)
+    logger = NewLogger(args.epochs + 1, args.workers, args.steps_per_epoch, *log_keys)
 
     processes = []
+    
     for rank in range(args.workers):
         p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.epochs, shared_ac, epoch_counter, env_params, params, logger, rank))
         # p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.epochs, shared_ac, epoch_counter, params))
         p.start()
         processes.append(p)
+        
     for p in processes:
         p.join()
         
