@@ -17,6 +17,7 @@ import numpy as np
 import os
 import time
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def save_ac(save_dir, ac, epoch):
     torch.save(ac.state_dict(), os.path.join(save_dir, 'ac_' + str(epoch.item()) + '.pt'))
@@ -130,7 +131,7 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, env_params,
     np.random.seed(params.get('seed') + rank)
     env = make_env(**env_params)
     
-    local_ac = ACAgent(env, **params)
+    local_ac = ACAgent(env, **params).to(device)
         
     while epoch_counter < num_epochs:
         
@@ -241,7 +242,7 @@ if __name__ == "__main__":
     # initialise environment and the shared networks 
     # env = make_env(**env_params)
     env = make_env_from_json(f'{args.num_gen}gen')
-    shared_ac = ACAgent(env, **params)
+    shared_ac = ACAgent(env, **params).to(device)
 
     if args.ac_weights_fn is not None:
         print("********************Using pre-trained AC weights***********************")
