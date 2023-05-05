@@ -11,7 +11,7 @@ from agents.ppo_async.ac_agent import ACAgent
 from agents.qlearning.qagent import QAgent
 from agents.ppo.ppo import PPOAgent
 
-from tree_search_utils.algos import uniform_cost_search, a_star, rta_star, brute_force
+from tree_search_utils.algos import uniform_cost_search, a_star, rta_star, brute_force, uniform_cost_search_robust
 
 import numpy as np
 import argparse
@@ -64,7 +64,7 @@ def solve_day_ahead(env,
         final_schedule[t, :] = a_best
         env.step(a_best, deterministic=True)
         print(f"Period {env.episode_timestep+1}", np.array(a_best, dtype=int), round(cost, 2), round(time.time()-period_start_time, 2))
-
+        
         root = root.children[a_best.tobytes()]
         root.parent, root.path_cost = None, 0
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
         print("Unguided search")
 
     # Convert the tree_search_method argument to a function:
-    func_list = [uniform_cost_search, a_star, rta_star, brute_force]
+    func_list = [uniform_cost_search, a_star, rta_star, brute_force, uniform_cost_search_robust]
     func_names = [f.__name__ for f in func_list]
     funcs_dict = dict(zip(func_names, func_list))
 
