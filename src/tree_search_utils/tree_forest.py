@@ -12,18 +12,36 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-class ObservationCurrupter:
+class BaseCorrupter:
     def __init__(self, corruption_rate):
         self.corruption_rate = corruption_rate
 
-    def corrupt(self, observation):
-        corrupted_observation = observation.copy()
-        random_mask = np.random.rand(*corrupted_observation.shape) < self.corruption_rate
-        random_values = np.random.randn(*corrupted_observation.shape) * corrupted_observation
-        corrupted_observation[random_mask] = random_values[random_mask]
-        return corrupted_observation
+    def corrupt(self, node):
+        raise NotImplementedError
 
-class BoxCorrupter:
+class MaskObservationCurrupter(BaseCorrupter):
+    def __init__(self, corruption_rate):
+        self.corruption_rate = corruption_rate
+        self.array_shape = None
+
+    def corrupt(self, node):
+        ep_forecast = node.state.episode_forecast
+        ep_wind_forecast = node.state.episode_wind_forecast
+        
+        self.array_shape = ep_forecast.shape
+        
+        node.state.episode_forecast = self._mask_and_corrupt(ep_forecast)
+        node.state.episode_wind_forecast = self._mask_and_corrupt(ep_wind_forecast)
+        
+        return node
+    
+    def _mask_and_corrupt(self, array):
+        random_mask = np.random.rand(*self.array_shape.shape) < self.corruption_rate
+        random_values = np.random.randn(*self.array_shape.shape) * array
+        array[random_mask] = random_values[random_mask]
+        return array
+
+class BoxCorrupter(BaseCorrupter):
     def __init__(self, corruption_rate):
         self.corruption_rate = corruption_rate
 

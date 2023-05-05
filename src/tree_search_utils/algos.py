@@ -52,6 +52,65 @@ def uniform_cost_search(node,
             if node.parent is None and len(actions) == 1:
                 return [actions[0]], 0
 
+def uniform_cost_search_robust(node, 
+                        terminal_timestep, 
+                        demand_scenarios,
+                        wind_scenarios,
+                        global_outage_scenarios,
+                        **policy_kwargs):
+    """Uniform cost search"""
+    if node.state.is_terminal() or node.state.episode_timestep == terminal_timestep:
+        return node_mod.get_solution(node)
+    frontier = queue.PriorityQueue()
+    frontier.put((0, id(node), node)) # include the object id in the priority queue. prevents type error when path_costs are identical.
+    while True:
+        assert frontier, "Failed to find a goal state"
+        node = frontier.get()[2]
+        if node.state.is_terminal() or node.state.episode_timestep == terminal_timestep:
+            return node_mod.get_solution(node)
+        actions = expansion.get_actions(node, **policy_kwargs)
+        
+        demand_scenarios_t = np.take(demand_scenarios, node.state.episode_timestep+1, axis=1)
+        wind_scenarios_t = np.take(wind_scenarios, node.state.episode_timestep+1, axis=1)
+        for i in range(10):
+            # compute the actions that the policy would take is the state of the node was modified by the different demand scenarios
+            # this is the robustness check
+            new_node = copy.deepcopy(node)
+            
+            node_ts = new_node.state.episode_timestep
+            
+            # move all the demand and wind scenarios after the current timestep by +- 10% #TODO: to be changed given the arma process generating the errors
+            ep_forecast = new_node.state.episode_forecast
+            ep_wind_forecast = new_node.state.episode_wind_forecast
+            
+            ep_forecast[node_ts+1:] = ep_forecast[node_ts+1:] * (1 + np.random.uniform(-0.1, 0.1, size=ep_forecast[node_ts+1:].shape))
+            ep_wind_forecast[node_ts+1:] = ep_wind_forecast[node_ts+1:] * (1 + np.random.uniform(-0.1, 0.1, size=ep_wind_forecast[node_ts+1:].shape))
+            
+            new_node.state.episode_forecast = ep_forecast
+            new_node.state.episode_wind_forecast = ep_wind_forecast
+            actions_new = expansion.get_actions(new_node, **policy_kwargs)
+            set_actions = set([tuple(a) for a in actions])
+            set_actions_new = set([tuple(a) for a in actions_new])
+            # check if some of the actions are different
+            if not set_actions == set_actions_new:
+                # plot the different actions
+                print('found different actions, at timestep', node.state.episode_timestep)
+                print('action_in_new_but_not_in_old', set_actions_new - set_actions)
+        for action in actions:
+            demand_scenarios_t = np.take(demand_scenarios, node.state.episode_timestep+1, axis=1)
+            wind_scenarios_t = np.take(wind_scenarios, node.state.episode_timestep+1, axis=1)
+            child = expansion.get_child_node(node=node, 
+                                             action=action, 
+                                             demand_scenarios=demand_scenarios_t,
+                                             wind_scenarios=wind_scenarios_t,
+                                             global_outage_scenarios=global_outage_scenarios)
+            node.children[action.tobytes()] = child
+            frontier.put((child.path_cost, id(child), child))
+
+            # Early stopping if root has one child
+            if node.parent is None and len(actions) == 1:
+                return [actions[0]], 0
+
 def a_star(node, 
            terminal_timestep, 
            demand_scenarios,
