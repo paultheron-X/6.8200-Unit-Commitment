@@ -1,0 +1,14 @@
+{
+    "nb_epochs":5000,
+    "lr":0.00025,
+    "gamma":0.99,
+    "memory_size":10000,
+    "initial_epsilon":1.0,
+    "min_epsilon":0.1,
+    "max_epsilon_decay_steps":5000,
+    "warmup_steps":500,
+    "target_update_freq":2000,
+    "batch_size":32,
+    "device":"cpu",
+    "enable_double_q":"True"
+}
