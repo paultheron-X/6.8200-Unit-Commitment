@@ -81,7 +81,7 @@ if __name__ == "__main__":
     plt.close()
     
     # save logs
-    env_params = json.load(open(args.env_fn))
+    env_params = json.load(open(args.env_fn + '.json', 'r'))
     with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as f:
         f.write(json.dumps(env_params, sort_keys=True, indent=4))
     with open(args.save_dir + '/log.json', 'w') as f:
