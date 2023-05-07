@@ -7,16 +7,16 @@ import matplotlib.pyplot as plt
 
 from rl4uc.environment import make_env_from_json
 
-from agents.mab.mab import MAB
+from agents.mab.mab_agent import MAB
 
 def train(save_dir, env_name, verbose=True):
 
-    cfg_folder = os.path.join('src/agents/random/configs/random.json')
+    cfg_folder = os.path.join('src/agents/mab/configs/mab.json')
     with open(cfg_folder) as f:
         cfg = json.load(f)
 
     env = make_env_from_json(env_name)
-    agent = MAB(env)
+    agent = MAB(env, cfg)
 
     ep_timesteps = []
     ep_rewards = []
@@ -25,9 +25,9 @@ def train(save_dir, env_name, verbose=True):
     nb_ep = 0
     ep_ret = 0
     for t in range(cfg['max_steps']):
-        action = agent.act(obs)
+        action, idx = agent.act(obs)
         next_obs, reward, done, info = env.step(action)
-        agent.update(action, reward)
+        agent.update(idx, reward)
         ep_ret += reward
         obs = next_obs
 
@@ -40,6 +40,7 @@ def train(save_dir, env_name, verbose=True):
             ep_ret = 0
             if verbose and nb_ep % 100 == 0:
                 print(f'Step {t}, episode {nb_ep}, smoothed reward {ep_rewards[-1]}', end='\r')
+        agent.decay_epsilon()
     log = {
         'mean_timesteps': ep_timesteps,
         'mean_reward': ep_rewards
@@ -52,14 +53,14 @@ if __name__ == "__main__":
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(description='Train Random Agent')
+    parser = argparse.ArgumentParser(description='Train MAB Agent')
     parser.add_argument('--save_dir', type=str, required=True)
     parser.add_argument('--env_name', type=str, required=True)
     parser.add_argument('--env_fn', type=str, required=True)
 
     args = parser.parse_args()
 
-    random_agent, log = train(
+    mab_agent, log = train(
         save_dir = args.save_dir,
         env_name = args.env_name,
         )
@@ -76,12 +77,12 @@ if __name__ == "__main__":
     plt.ylabel('Rolling nean of Mean Rewards')
     plt.title('Rolling Mean of Log Mean Rewards with Window Size {}'.format(window_size))
 
-    file_name = 'rolling_mean_rewards_random_agent.png'
+    file_name = 'rolling_mean_rewards_mab_agent.png'
     plt.savefig(f'{args.save_dir}/{file_name}', format='png')
     plt.close()
     
     # save logs
-    env_params = json.load(open(args.env_fn))
+    env_params = json.load(open(args.env_fn + '.json', 'r'))
     with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as f:
         f.write(json.dumps(env_params, sort_keys=True, indent=4))
     with open(args.save_dir + '/log.json', 'w') as f:

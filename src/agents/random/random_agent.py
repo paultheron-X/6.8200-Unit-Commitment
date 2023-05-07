@@ -8,7 +8,7 @@ class RandomAgent():
         self.num_gen = env.num_gen
         self.action_size = env.action_size
         self.action_space = spaces.Box(low=0, high=1, shape=(self.action_size,), dtype=np.int16)
-        
+
     def act(self, obs):
         """
         Agent always acts greedily w.r.t Q-values!
