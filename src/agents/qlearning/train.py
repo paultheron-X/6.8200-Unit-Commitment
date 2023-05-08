@@ -97,6 +97,16 @@ if __name__ == "__main__":
     plt.savefig(f'{args.save_dir}/{file_name}', format='png')
     plt.close()
     
+    plt.figure(figsize=(10, 5))
+    plt.plot(qagent.losses)
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title('Loss by number of epochs')
+
+    file_name = 'losses_qagent.png'
+    plt.savefig(f'{args.save_dir}/{file_name}', format='png')
+    plt.close()
+    
     # save logs
     env_params = json.load(open(args.env_fn))
     with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as f:
@@ -105,7 +115,7 @@ if __name__ == "__main__":
         json.dump(log, f)
         
     # save agent 
-    torch.save(qagent.state_dict(), os.path.join(args.save_dir, 'qagent_final.pt'))
+    torch.save(qagent.q.state_dict(), os.path.join(args.save_dir, 'qagent_final.pt'))
     
     
  

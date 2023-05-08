@@ -58,6 +58,8 @@ class QAgent():
         
         self.reset()
         print(self.q)
+        
+        self.losses = []
     
     def reset(self):
         self.epsilon = self.initial_epsilon
@@ -179,9 +181,9 @@ class QAgent():
         td_target = rews + self.gamma * next_qs
         
         loss = self.loss_criterion(qs, td_target)
-        
-        print('state_dict', self.q.state_dict()['layers.2.weight'][0, 0:5])
-        
+        # print(loss.item())
+        # print('state_dict', self.q.state_dict()['layers.2.weight'][0, 0:5])
+        self.losses.append(loss.item())
         loss.backward()
         self.optimizer.step()
         
