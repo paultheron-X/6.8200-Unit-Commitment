@@ -7,6 +7,9 @@ from rl4uc import processor
 
 from gym import spaces
 
+# torch detect anomaly
+#torch.autograd.set_detect_anomaly(True)
+
 class QNetwork(nn.Module):
     def __init__(self, obs_size, num_nodes, n_out):
         super().__init__()
@@ -14,13 +17,19 @@ class QNetwork(nn.Module):
             nn.Linear(obs_size, num_nodes),
             nn.ReLU(),
             nn.Linear(num_nodes, n_out),
-            nn.Sigmoid()
+            #nn.Sigmoid()
         )
+        #self.init_network()
 
     def forward(self, ob):
         return self.layers(ob)
+    
+    def init_network(self):
+        # init everything to 1
+        for p in self.parameters():
+            p.data.fill_(1)
 
-class QAgent(nn.Module):
+class QAgent():
     def __init__(self, env, cfg, **kwargs):
         super(QAgent, self).__init__()
         self.__dict__.update(kwargs)
@@ -48,6 +57,7 @@ class QAgent(nn.Module):
         self.action_space = spaces.Box(low=0, high=1, shape=(self.action_size,), dtype=np.int16)
         
         self.reset()
+        print(self.q)
     
     def reset(self):
         self.epsilon = self.initial_epsilon
@@ -57,7 +67,12 @@ class QAgent(nn.Module):
         self.target_q = QNetwork(self.obs_size, self.num_nodes, 2*self.num_gen)
         
         self.optimizer = optim.Adam(self.q.parameters(), lr=self.cfg['lr'])
-        self.loss_criterion = nn.MSELoss()
+        #self.loss_criterion = nn.MSELoss()
+        #self.loss_criterion = nn.BCEWithLogitsLoss()
+        self.loss_criterion = nn.HuberLoss()
+        
+        self.q.train()
+        self.target_q.train()
         
     def process_observation(self, obs):
         """
@@ -77,14 +92,15 @@ class QAgent(nn.Module):
         self.epsilon = max(self.epsilon - self.ep_reduction, self.min_epsilon)
     
     def forward(self, obs):
-        return self.q.forward(torch.as_tensor(obs).float())
+        return self.q.forward(obs)
     
-    @torch.no_grad()
+    #@torch.no_grad()
     def act(self, obs, greedy_only=False, warmup=False):
         """
         Agent always acts greedily w.r.t Q-values!
         """
         processed_obs = self.process_observation(obs)
+        processed_obs = torch.from_numpy(processed_obs).float()
         
         if warmup:
             action = self.action_space.sample()
@@ -129,6 +145,7 @@ class QAgent(nn.Module):
     
     def update(self, memory, batch_size=None):
         
+        #print("--> Before", self.q.layers[0].weight)
         if memory.num_used < self.warmup_steps:
             return 0
         
@@ -136,10 +153,18 @@ class QAgent(nn.Module):
             batch_size = self.batch_size
         
         data = memory.sample(batch_size)
-        qs = self.q(torch.as_tensor(data['obs']).float()).reshape(batch_size, self.num_gen, 2)
+        
+        self.optimizer.zero_grad()
+        
+        qs = self.q(torch.as_tensor(data['obs']).float()).float()
+        qs = qs.reshape(batch_size, self.num_gen, 2)
+        
+        #print(type(qs), qs.requires_grad)
         m,n = data['act'].shape
         I,J = np.ogrid[:m,:n]
         qs = qs[I, J, data['act']]
+        #print(type(qs), qs.requires_grad)
+        
         
         next_qs = self.target_q(torch.as_tensor(data['next_obs']).float()).reshape(batch_size, self.num_gen, 2)
         next_acts = next_qs.argmax(axis=2).detach().numpy()
@@ -153,8 +178,10 @@ class QAgent(nn.Module):
 
         td_target = rews + self.gamma * next_qs
         
-        self.optimizer.zero_grad()
         loss = self.loss_criterion(qs, td_target)
+        
+        print('state_dict', self.q.state_dict()['layers.2.weight'][0, 0:5])
+        
         loss.backward()
         self.optimizer.step()
         

@@ -33,15 +33,14 @@ def train(save_dir, env_name, cfg_path, verbose=True):
     for t in range(cfg['max_steps']):
         action, processed_obs = agent.act(obs, warmup=(t < agent.warmup_steps))
         next_obs, reward, done, info = env.step(action)
+        
+        if t == agent.warmup_steps:
+            print('\nWarmup done')
 
         if not done:
             next_obs_processed = agent.process_observation(next_obs)
             memory.store(processed_obs, action, reward, next_obs_processed)
-        if t > agent.warmup_steps:
-            print(agent.q.state_dict())
         agent.update(memory)
-        if t > agent.warmup_steps:
-            print(agent.q.state_dict())
         ep_ret += reward
         obs = next_obs
 
