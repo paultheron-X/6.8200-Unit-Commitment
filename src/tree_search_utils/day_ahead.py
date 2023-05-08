@@ -8,7 +8,7 @@ from agents import helpers
 
 from tree_search_utils.scenarios import get_net_demand_scenarios, get_scenarios, get_global_outage_scenarios
 from agents.ppo_async.ac_agent import ACAgent
-from agents.qlearning.qagent import QAgent
+from agents.qlearning.old.qagent import QAgent
 from agents.ppo.ppo import PPOAgent
 
 from tree_search_utils.algos import uniform_cost_search, a_star, rta_star, brute_force, uniform_cost_search_robust

@@ -16,6 +16,8 @@ from agents.qlearning.old.qagent import QAgent
 from agents.ppo.ppo import PPOAgent
 
 from tree_forest import TreeBuilder, DistributedTreeBuilder
+from utils import get_multiple_profiles_path
+
 
 import numpy as np
 import argparse
@@ -75,7 +77,6 @@ def solve_day_ahead(env, horizon, **params):
             step_cost=0,
             path_cost=0,
         )
-       
 
         gc.collect()
 
@@ -158,6 +159,13 @@ if __name__ == "__main__":
         default="check_lost_load",
         help="Heuristic method to use (when using A* or its variants)",
     )
+    parser.add_argument(
+        "--num_files",
+        type=int,
+        required=False,
+        default=10,
+        help="Number of files to use for testing",
+    )
 
     args = parser.parse_args()
 
@@ -197,87 +205,125 @@ if __name__ == "__main__":
     with open(os.path.join(args.save_dir, "env_params.json"), "w") as fp:
         fp.write(json.dumps(env_params, sort_keys=True, indent=4))
 
-    prof_name = os.path.basename(os.path.normpath(args.test_data)).split(".")[0]
+    #prof_name = os.path.basename(os.path.normpath(args.test_data)).split(".")[0]
+    
+    # get the root path of the profile
+    prof_path = os.path.dirname(os.path.normpath(args.test_data))
+    
+    
+    sample_path = get_multiple_profiles_path(prof_path, args.num_files)
+    
+    results_gen = {}
+    results_gen['profile'] = []
+    results_gen['schedule'] = []
+    results_gen['cost'] = []
+    results_gen['time'] = []
+    results_gen['period_time'] = []
+    results_gen['lost_loads'] = []
+    
+    for i in range(args.num_files):
+        
+        prof_name = os.path.basename(os.path.normpath(sample_path[i])).split('.')[0]
 
-    print("------------------")
-    print("Profile: {}".format(prof_name))
-    print("------------------")
 
-    # Initialise environment with forecast profile and reference forecast (for scaling)
-    profile_df = pd.read_csv(args.test_data)
-    env = make_env(mode="test", profiles_df=profile_df, **env_params)
+        print("------------------")
+        print("Profile: {}".format(prof_name))
+        print("------------------")
 
-    # Generate scenarios for demand and wind errors
-    scenarios = get_net_demand_scenarios(profile_df, env, args.num_scenarios)
-    demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_scenarios)
-    if env.outages:
-        global_outage_scenarios = get_global_outage_scenarios(
-            env, env.episode_length + env.gen_info.status.max(), args.num_scenarios
-        )
-    else:
-        global_outage_scenarios = None
+        # Initialise environment with forecast profile and reference forecast (for scaling)
+        profile_df = pd.read_csv(args.test_data)
+        env = make_env(mode="test", profiles_df=profile_df, **env_params)
 
-    # Load policy
-    if args.policy_filename is not None:
-        if agent_type == "ppo_async":
-            policy = ACAgent(env, test_seed=args.seed, **policy_params)
-        elif agent_type == "qlearning":
-            policy = QAgent(env, test_seed=args.seed, **policy_params)
-        elif agent_type == "ppo":
-            policy = PPOAgent(env, test_seed=args.seed, **policy_params)
+        # Generate scenarios for demand and wind errors
+        scenarios = get_net_demand_scenarios(profile_df, env, args.num_scenarios)
+        demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_scenarios)
+        if env.outages:
+            global_outage_scenarios = get_global_outage_scenarios(
+                env, env.episode_length + env.gen_info.status.max(), args.num_scenarios
+            )
         else:
-            raise ValueError("Unknown agent type")
-        if torch.cuda.is_available():
-            policy.cuda()
-        policy.load_state_dict(torch.load(args.policy_filename))
-        policy.eval()
-        print("Guided search")
-    else:
-        policy = None
-        print("Unguided search")
+            global_outage_scenarios = None
 
-    # Run the tree search
-    s = time.time()
-    schedule_result, period_times, breadths = solve_day_ahead(env=env, policy=policy, **params)
-    time_taken = time.time() - s
+        # Load policy
+        if args.policy_filename is not None:
+            if agent_type == "ppo_async":
+                policy = ACAgent(env, test_seed=args.seed, **policy_params)
+            elif agent_type == "qlearning":
+                policy = QAgent(env, test_seed=args.seed, **policy_params)
+            elif agent_type == "ppo":
+                policy = PPOAgent(env, test_seed=args.seed, **policy_params)
+            else:
+                raise ValueError("Unknown agent type")
+            if torch.cuda.is_available():
+                policy.cuda()
+            policy.load_state_dict(torch.load(args.policy_filename))
+            policy.eval()
+            print("Guided search")
+        else:
+            policy = None
+            print("Unguided search")
 
-    # DEBUG: Schedule is an array of size (48, 5) with all the actions across the episode
+        # Run the tree search
+        s = time.time()
+        schedule_result, period_times, breadths = solve_day_ahead(env=env, policy=policy, **params)
+        time_taken = time.time() - s
 
-    # Save schedule
-    # torch.save(schedule_result, os.path.join(args.save_dir, 'schedule.pt'))
-    # Get distribution of costs for solution by running multiple times through environment
-    TEST_SAMPLE_SEED = 999
-    results = helpers.test_schedule(env, schedule_result, TEST_SAMPLE_SEED, args.num_samples)
+        # DEBUG: Schedule is an array of size (48, 5) with all the actions across the episode
 
-    helpers.save_results(
-        prof_name=prof_name,
-        save_dir=args.save_dir,
-        env=env,
-        schedule=schedule_result,
-        test_costs=results["total_cost"],
-        test_kgco2=results["kgco2"],
-        lost_loads=results["lost_load_events"],
-        results_df=results,
-        time_taken=time_taken,
-        breadths=breadths,
-        period_time_taken=period_times,
-    )
+        # Save schedule
+        # torch.save(schedule_result, os.path.join(args.save_dir, 'schedule.pt'))
+        # Get distribution of costs for solution by running multiple times through environment
+        TEST_SAMPLE_SEED = 999
+        results = helpers.test_schedule(env, schedule_result, TEST_SAMPLE_SEED, args.num_samples)
 
-    print("Done")
-    print()
-    print("Mean costs: ${:.2f}".format(np.mean(results["total_cost"])))
-
-    print(results["total_cost"])
-    # normalised cost by the demand of the profile
-    print("Net demand: {:.2f}MWh".format(env.net_demand.sum()))
-    print("Net demand bis", scenarios)
-
-    print(
-        "Lost load prob: {:.3f}%".format(
-            100 * np.sum(results["lost_load_events"]) / (args.num_samples * env.episode_length)
+        helpers.save_results(
+            prof_name=prof_name,
+            save_dir=args.save_dir,
+            env=env,
+            schedule=schedule_result,
+            test_costs=results["total_cost"],
+            test_kgco2=results["kgco2"],
+            lost_loads=results["lost_load_events"],
+            results_df=results,
+            time_taken=time_taken,
+            breadths=breadths,
+            period_time_taken=period_times,
         )
-    )
-    print("Time taken: {:.2f}s".format(time_taken))
-    print("Mean curtailed {:.2f}MWh".format(results.curtailed_mwh.mean()))
-    print("Mean CO2: {:.2f}kg".format(results.kgco2.mean()))
+
+        print("Done")
+        print()
+        print("Mean costs: ${:.2f}".format(np.mean(results["total_cost"])))
+
+        print(results["total_cost"])
+        # normalised cost by the demand of the profile
+        print("Net demand: {:.2f}MWh".format(env.net_demand.sum()))
+        print("Net demand bis", scenarios)
+
+        print(
+            "Lost load prob: {:.3f}%".format(
+                100 * np.sum(results["lost_load_events"]) / (args.num_samples * env.episode_length)
+            )
+        )
+        print("Time taken: {:.2f}s".format(time_taken))
+        print("Mean curtailed {:.2f}MWh".format(results.curtailed_mwh.mean()))
+        print("Mean CO2: {:.2f}kg".format(results.kgco2.mean()))
+        print()
+
+    
+    # save the dictionary
+    with open(os.path.join(args.save_dir, 'results_gen.json'), 'w') as fp:
+        fp.write(json.dumps(results_gen, sort_keys=True, indent=4))
+        
+    # print the results
+    print('------------------'*10)
+    print('------------------'*10)
+    print("Results Generalisation")
+    print('------------------'*10)
+    
+    print("Mean costs: ${:.2f}".format(np.mean(results_gen['cost'])))
+    print("Cost Std: ${:.2f}".format(np.std(results_gen['cost'])))
+    
+    print("Mean time: {:.2f}s".format(np.mean(results_gen['time'])))
+    print("Mean period time: {:.2f}s".format(np.mean(results_gen['period_time'])))
+    print("Mean lost load prob: {:.3f}%".format(np.mean(results_gen['lost_loads'])))
     print()

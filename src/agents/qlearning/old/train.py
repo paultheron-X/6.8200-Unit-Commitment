@@ -12,62 +12,54 @@ from rl4uc.environment import make_env_from_json
 
 from qagent import QAgent, ReplayMemory
 
-def train(**kwargs):
+def train(save_dir, env_name, cfg_path, verbose=True):
+
+    cfg_folder = os.path.join('src/agents/qlearning/configs', cfg_path)
+    with open(cfg_folder) as f:
+        cfg = json.load(f)
     
-    MEMORY_SIZE = 200
-    N_EPOCHS = 1000
-    
-    env = make_env_from_json('5gen')
-    agent = QAgent(env)
-    memory = ReplayMemory(MEMORY_SIZE, agent.obs_size, env.num_gen)
-    
-    log = {'mean_timesteps': [],
-           'mean_reward': [],
-            'smooth_ep_ret': deque(maxlen=100)}
-    log['smooth_ep_ret'].append(0)
-    log['mean_reward'].append(0)
-    log['mean_timesteps'].append(0)
-    
-    for i in range(N_EPOCHS):
-        #print('\n')
-        if (i+1) % 10 == 0:
-            print("\nEpoch {}".format(i+1))
-        epoch_timesteps = []
-        epoch_rewards = []
-        # print the reward on the same line
-        print(f"Reward: {log['mean_reward'][-1]}", end='\r')
-        while memory.is_full() == False:
-            done = False
-            obs = env.reset()
-            timesteps = 0
-            while not done: 
-                action, processed_obs = agent.act(obs)
-                next_obs, reward, done, _ = env.step(action)
-                if not done: # otherwise bug because obs lists are empty
-                    next_obs_processed = agent.process_observation(next_obs)
-                    memory.store(processed_obs, action, reward, next_obs_processed)
-                
-                obs = next_obs
-                
-                
-                if memory.is_full():
-                    break
-                
-                timesteps += 1
-                if done:
-                    epoch_rewards.append(reward)
-                    epoch_timesteps.append(timesteps)
-                    log['smooth_ep_ret'].append(reward)     
+    memory_size = 100000
+
+    env = make_env_from_json(env_name)
+    agent = QAgent(env, cfg)
+    memory = ReplayMemory(memory_size, agent.obs_size, env.num_gen)
+
+    ep_timesteps = []
+    ep_rewards = []
+    smooth_ep_ret = deque(maxlen=500)
+    obs = env.reset()
+    nb_ep = 0
+    ep_ret = 0
+    for t in range(cfg['max_steps']):
+        action, processed_obs = agent.act(obs, warmup=(t < agent.warmup_steps))
+        next_obs, reward, done, info = env.step(action)
         
-        log['mean_timesteps'].append(np.mean(epoch_timesteps))
-        log['mean_reward'].append(np.mean(epoch_rewards))
-        
+        if t == agent.warmup_steps:
+            print('\nWarmup done')
+
+        if not done:
+            next_obs_processed = agent.process_observation(next_obs)
+            memory.store(processed_obs, action, reward, next_obs_processed)
         agent.update(memory)
-        memory.reset()
-    
-    log['mean_reward'] = log['mean_reward'][1:]
-    log['mean_timesteps'] = log['mean_timesteps'][1:]
-                    
+        ep_ret += reward
+        obs = next_obs
+
+        if done:
+            obs = env.reset()
+            smooth_ep_ret.append(ep_ret)
+            ep_rewards.append(np.mean(smooth_ep_ret))
+            ep_timesteps.append(t)
+            nb_ep += 1
+            ep_ret = 0
+            if verbose and nb_ep % 100 == 0:
+                print(f'Step {t}, episode {nb_ep}, smoothed reward {ep_rewards[-1]}', end='\r')
+        agent.decay_epsilon()
+        agent.update_target()
+    log = {
+        'mean_timesteps': ep_timesteps,
+        'mean_reward': ep_rewards
+    }
+         
     return agent, log
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ else
 fi
 
 
-save_dir=results/raw_agents/${agent}/test_${date}/
+save_dir=results/raw_agents/multiple_periods/${agent}/test_${date}/
 params_filename=results/agents/${agent}/${num_gen}gen/params.json #results/tmp/params.json 
 env_params_filename=results/agents/${agent}/${num_gen}gen/env_params.json #src/ts4uc_scripts/data/day_ahead/${num_gen}gen/30min/env_params.json
 policy_filename=results/agents/${agent}/${num_gen}gen/ac_final.pt #results/tmp/ac_final.pt
@@ -29,7 +29,7 @@ heuristic_method=${9:-none}
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 
-python src/tree_search_utils/day_ahead_raw_agent.py --save_dir $save_dir \
+python src/tree_search_utils/tests/multiple_day_ahead_raw_agent.py --save_dir $save_dir \
                                             --policy_params_fn $params_filename \
                                             --env_params_fn $env_params_filename \
                                             --test_data $testfile \
@@ -39,5 +39,6 @@ python src/tree_search_utils/day_ahead_raw_agent.py --save_dir $save_dir \
                                             --tree_search_func_name $tree_search_func_name \
                                             --heuristic_method $heuristic_method \
                                             --seed 1 \
-                                            --policy_filename $policy_filename 
+                                            --policy_filename $policy_filename \
+                                            --num_files 10 \
 

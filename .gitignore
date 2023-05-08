@@ -131,3 +131,8 @@ dmypy.json
 results/guided_tree_search/*
 results/tmp
 results/agents/test
+
+.vscode
+
+results/guided_tree_search/*
+results/raw_agents/*
