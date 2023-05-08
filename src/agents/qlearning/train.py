@@ -18,7 +18,7 @@ def train(save_dir, env_name, cfg_path, verbose=True):
     with open(cfg_folder) as f:
         cfg = json.load(f)
     
-    memory_size = 2000
+    memory_size = 100000
 
     env = make_env_from_json(env_name)
     agent = QAgent(env, cfg)
@@ -37,7 +37,11 @@ def train(save_dir, env_name, cfg_path, verbose=True):
         if not done:
             next_obs_processed = agent.process_observation(next_obs)
             memory.store(processed_obs, action, reward, next_obs_processed)
+        if t > agent.warmup_steps:
+            print(agent.q.state_dict())
         agent.update(memory)
+        if t > agent.warmup_steps:
+            print(agent.q.state_dict())
         ep_ret += reward
         obs = next_obs
 

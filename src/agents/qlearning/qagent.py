@@ -10,9 +10,6 @@ from gym import spaces
 class QNetwork(nn.Module):
     def __init__(self, obs_size, num_nodes, n_out):
         super().__init__()
-        #### A simple convoluntional network that takes
-        #### as input the observation (image), and outputs the 
-        #### Q values for each possible action.
         self.layers = nn.Sequential(
             nn.Linear(obs_size, num_nodes),
             nn.ReLU(),
@@ -59,8 +56,8 @@ class QAgent(nn.Module):
         self.q = QNetwork(self.obs_size, self.num_nodes, 2*self.num_gen)
         self.target_q = QNetwork(self.obs_size, self.num_nodes, 2*self.num_gen)
         
-        self.optimizer = optim.Adam(self.parameters(), lr=self.cfg['lr'])
-        self.loss_criterion = nn.HuberLoss()
+        self.optimizer = optim.Adam(self.q.parameters(), lr=self.cfg['lr'])
+        self.loss_criterion = nn.MSELoss()
         
     def process_observation(self, obs):
         """
@@ -155,10 +152,9 @@ class QAgent(nn.Module):
         rews = torch.as_tensor(np.copy(rews)).float()
 
         td_target = rews + self.gamma * next_qs
-
-        loss = self.loss_criterion(qs, td_target)
         
         self.optimizer.zero_grad()
+        loss = self.loss_criterion(qs, td_target)
         loss.backward()
         self.optimizer.step()
         
