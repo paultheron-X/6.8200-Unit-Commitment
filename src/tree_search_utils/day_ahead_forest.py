@@ -46,7 +46,7 @@ def solve_day_ahead(env, horizon, **params):
 
         forest = TreeBuilder(
             root_node=root,
-            num_trees=100,
+            num_trees=10,
             terminal_timestep=terminal_timestep,
             corruption_rate=0.1,
             num_workers=4,
