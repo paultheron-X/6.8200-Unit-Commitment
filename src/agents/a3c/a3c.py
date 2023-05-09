@@ -49,11 +49,11 @@ class ActorBuffer:
 
         self.num_used = min(self.num_used, self.max_size-1)
         
-        self.sub_obs_buf[self.num_used] = sub_obs
-        self.act_buf[self.num_used] = act
-        self.logp_buf[self.num_used] = logp
+        self.sub_obs_buf[self.num_used] = sub_obs.cpu().numpy()
+        self.act_buf[self.num_used] = act.cpu().numpy()
+        self.logp_buf[self.num_used] = logp.cpu().detach().numpy()
         self.rew_buf[self.num_used] = rew
-        self.val_buf[self.num_used] = val
+        self.val_buf[self.num_used] = val.cpu().detach().numpy()
         
         self.num_used +=1 
         
@@ -115,7 +115,7 @@ class CriticBuffer:
         
         self.num_used = min(self.num_used, self.max_size-1)
         
-        self.obs_buf[self.num_used] = obs
+        self.obs_buf[self.num_used] = obs.cpu().numpy()
         self.rew_buf[self.num_used] = rew
         
         self.num_used +=1 
@@ -180,20 +180,20 @@ class A3CAgent(nn.Module):
 
         print(self.gamma)
             
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.actor_buffer = ActorBuffer(self.n_in_ac, 1, self.buffer_size, self.gamma, env.min_reward)
         self.critic_buffer = CriticBuffer(self.n_in_cr, self.buffer_size, self.gamma, env.min_reward)
         
-        self.in_ac = nn.Linear(self.n_in_ac, self.num_nodes)
-        self.in_cr = nn.Linear(self.n_in_cr, self.num_nodes)
+        self.in_ac = nn.Linear(self.n_in_ac, self.num_nodes).to(self.device)
+        self.in_cr = nn.Linear(self.n_in_cr, self.num_nodes).to(self.device)
         
-        self.ac_layers = nn.ModuleList([nn.Linear(self.num_nodes, self.num_nodes) for i in range(self.num_layers)])
-        self.cr_layers = nn.ModuleList([nn.Linear(self.num_nodes, self.num_nodes) for i in range(self.num_layers)])
+        self.ac_layers = nn.ModuleList([nn.Linear(self.num_nodes, self.num_nodes) for i in range(self.num_layers)]).to(self.device)
+        self.cr_layers = nn.ModuleList([nn.Linear(self.num_nodes, self.num_nodes) for i in range(self.num_layers)]).to(self.device)
         
-        self.output_ac = nn.Linear(self.num_nodes, 2)
-        self.output_cr = nn.Linear(self.num_nodes, 1)
+        self.output_ac = nn.Linear(self.num_nodes, 2).to(self.device)
+        self.output_cr = nn.Linear(self.num_nodes, 1).to(self.device)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.test_seed = kwargs.get('test_seed')
 
     def get_action_scores(self, x):
@@ -380,21 +380,21 @@ class A3CAgent(nn.Module):
         obs, act, adv, logp_old = data['sub_obs'], data['act'], data['adv'], data['logp']
 
         # Policy loss
-        pi = self.forward_ac(obs)
-        logp = pi.log_prob(act[:,0])
+        pi = self.forward_ac(obs.to(self.device))
+        logp = pi.log_prob(act[:,0].to(self.device))
         
         # Update: VPG with entropy regularisation
         entropy = pi.entropy()
-        loss_pi = -(logp * (adv + self.entropy_coef * entropy )).mean() # useful comparison: VPG
+        loss_pi = -(logp * (adv.to(self.device) + self.entropy_coef * entropy )).mean() # useful comparison: VPG
         
         return loss_pi, entropy
     
     def compute_loss_v(self, data):
         # TODO: make sure that the correct network (worker or global) is computing value 
         obs, ret = data['obs'], data['ret']
-        pred = self.forward_cr(obs)
-        explained_variance = 1 - (torch.var(ret - pred))/torch.var(ret)
-        return ((pred - ret)**2).mean(), explained_variance
+        pred = self.forward_cr(obs.to(self.device))
+        explained_variance = 1 - (torch.var(ret.to(self.device) - pred))/torch.var(ret.to(self.device))
+        return ((pred - ret.to(self.device))**2).mean(), explained_variance
 
     def get_minibatch(self, data, max_idx):
         idx = np.random.choice(np.arange(max_idx), size=self.minibatch_size, replace=False)

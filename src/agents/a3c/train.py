@@ -105,8 +105,8 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
                 local_ac.actor_buffer.finish_ep_new(ts=ep_sub_acts, 
                                                     ep_rews=ep_rews,
                                                     ep_vals=ep_vals,
-                                                    last_val=local_ac.get_value(obs)[0].detach().numpy())
-                local_ac.critic_buffer.finish_ep(last_val=local_ac.get_value(obs)[0].detach().numpy())
+                                                    last_val=local_ac.get_value(obs)[0].cpu().detach().numpy())
+                local_ac.critic_buffer.finish_ep(last_val=local_ac.get_value(obs)[0].cpu().detach().numpy())
 
             entropy, loss_v, explained_variance = shared_ac.update(local_ac, pi_optimizer, v_optimizer)
             mean_entropy, loss_v, explained_variance = torch.mean(entropy).item(), loss_v.item(), explained_variance.item()
