@@ -1,7 +1,7 @@
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 
 python src/agents/a3c/train.py \
-    --save_dir results/agents/qlearning/$1 \
+    --save_dir results/agents/a3c/$1 \
     --env_name $1 \
     --num_epochs 10000 \
     --buffer_size 2000 \

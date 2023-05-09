@@ -7,9 +7,9 @@ import scipy.signal as signal
 import copy
 from collections import namedtuple
 
-from rl4uc.environment import make_env
-from ts4uc.agents.sac import sac
-from ts4uc.agents.ppo.train import Logger
+from rl4uc.environment import make_env_from_json
+from agents.sac.sac import SACAgent
+from agents.agent_training_logger import Logger
 from agents import helpers
 import pandas as pd 
 import os
@@ -56,7 +56,7 @@ class ReplayBuffer:
         if done != None:
             self.done_buf[n] = done
         if discount != None:
-            self.dsicount_buf[n] = discount
+            self.discount_buf[n] = discount
 
         self.num_used += 1
 
@@ -69,7 +69,7 @@ class ReplayBuffer:
 
         data = dict(obs=self.obs_buf[idx], act=self.act_buf[idx],
                     rew=self.rew_buf[idx], next_obs=self.next_obs_buf[idx],
-                    done=self.done_buf[idx], discount=self.dsicount_buf[idx])
+                    done=self.done_buf[idx], discount=self.discount_buf[idx])
 
         return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in data.items()}
 
@@ -143,7 +143,7 @@ class Worker(mp.Process):
                 a, sub_obs, sub_acts, _ = self.policy.generate_action(self.env, obs)
 
                 # Step environment 
-                obs, reward, done = self.env.step(a)
+                obs, reward, done, _ = self.env.step(a)
 
                 # Record unscaled reward
                 unscaled_ep_rewards.append(reward)
@@ -180,11 +180,12 @@ class Worker(mp.Process):
 
 
 def train(save_dir,
+          env_name,
           timesteps, 
           num_workers, 
           steps_per_epoch, 
           buffer_size,
-          env_params, 
+        #   env_params, 
           policy_params,
           gamma,
           lam):
@@ -196,8 +197,8 @@ def train(save_dir,
     worker_steps_per_epoch = int(steps_per_epoch / num_workers)
 
 
-    env = make_env(**env_params)
-    policy = sac.SACAgent(env, **policy_params).share_memory()
+    env = make_env_from_json(env_name)
+    policy = SACAgent(env, **policy_params).share_memory()
 
     # The actor buffer will typically take more entries than the critic buffer,
     # because it records sub-actions. Hence there is usually more than one entry
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train SAC agent')
     parser.add_argument('--save_dir', type=str, required=True)
     parser.add_argument('--workers', type=int, required=False, default=1)
-    parser.add_argument('--num_gen', type=int, required=True)
+    parser.add_argument('--env_name', type=str, required=True)
     parser.add_argument('--timesteps', type=int, required=True)
     parser.add_argument('--steps_per_epoch', type=int, required=True)
     parser.add_argument('--buffer_size', type=int, required=True)
@@ -312,22 +313,23 @@ if __name__ == "__main__":
         fp.write(json.dumps(policy_params, sort_keys=True, indent=4))
     
     # Load the env params and save them to save_dir
-    env_params = helpers.retrieve_env_params(args.num_gen)
-    with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as fp:
-        fp.write(json.dumps(env_params, sort_keys=True, indent=4))
+    # env_params = helpers.retrieve_env_params(args.num_gen)
+    # with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as fp:
+    #     fp.write(json.dumps(env_params, sort_keys=True, indent=4))
 
     # Calculate gamma 
-    gamma = helpers.calculate_gamma(policy_params['credit_assignment_1hr'], env_params['dispatch_freq_mins'])
+    gamma = helpers.calculate_gamma(policy_params['credit_assignment_1hr'], 30)
 
     # Lambda for GAE 
     lam = 0.95
 
     train(save_dir=args.save_dir,
+          env_name=args.env_name,
           timesteps=args.timesteps,
           num_workers=args.workers,
           steps_per_epoch=args.steps_per_epoch,
           buffer_size=args.buffer_size,
-          env_params=env_params,
+        #   env_params=env_params,
           policy_params=policy_params,
           gamma=gamma,
           lam=lam)
