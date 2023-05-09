@@ -1,0 +1,19 @@
+{
+    "ac_learning_rate": 3e-05,
+    "buffer_size": 2000,
+    "cr_learning_rate": 0.0003,
+    "credit_assignment_1hr": 0.9,
+    "ent_learning_rate": 0.01,
+    "env_name": "5gen",
+    "forecast_horizon_hrs": 12,
+    "gradient_steps": 4,
+    "minibatch_size": null,
+    "num_layers": 3,
+    "num_nodes": 32,
+    "observation_processor": "LimitedHorizonProcessor",
+    "save_dir": "results/agents/sac/5gen",
+    "steps_per_epoch": 1000,
+    "target_entropy": 0.2,
+    "timesteps": 1000000,
+    "workers": 4
+}

@@ -4,7 +4,7 @@
 DEFAULT_SAVE_INTERVAL = 5000
 EPOCH_SAVE_INTERVAL = 1000
 
-from rl4uc.environment import make_env
+from rl4uc.environment import make_env_from_json
 import torch
 from torch.optim.lr_scheduler import LambdaLR
 import torch.optim as optim
@@ -122,7 +122,7 @@ def run_epoch(save_dir, env, local_ac, shared_ac, pi_optimizer, v_optimizer, epo
         print("---------------------------")
         save_ac(save_dir, shared_ac, epoch_counter) 
 
-def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, params):
+def run_worker(save_dir, env_name, rank, num_epochs, shared_ac, epoch_counter, params):
     """
     Training with a single worker. 
     
@@ -143,7 +143,7 @@ def run_worker(save_dir, rank, num_epochs, shared_ac, epoch_counter, params):
 
     
     np.random.seed(params.get('seed') + rank)
-    env = make_env(**params)
+    env = make_env_from_json(env_name)
     
     local_ac = A3CAgent(env, **params)
         
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train A3C agent')
     parser.add_argument('--save_dir', type=str, required=True)
     parser.add_argument('--workers', type=int, required=False, default=1)
-    parser.add_argument('--num_gen', type=int, required=True)
+    parser.add_argument('--env_name', type=str, required=True)
     parser.add_argument('--num_epochs', type=int, required=True)
     parser.add_argument('--buffer_size', type=int, required=True)
     parser.add_argument('--seed', type=int, required=False, default=np.random.randint(99999999))
@@ -219,14 +219,14 @@ if __name__ == "__main__":
 
 
     # Read the env parameters and these to all params 
-    env_params = helpers.retrieve_env_params(args.num_gen)
+    # env_params = helpers.retrieve_env_params(args.num_gen)
 
     # Check if cuda is available:
     if torch.cuda.is_available():
          torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
     # initialise environment and the shared networks 
-    env = make_env(**env_params)
+    env = make_env_from_json(args.env_name)
     shared_ac = A3CAgent(env, **policy_params)
     shared_ac.train()
     shared_ac.share_memory()
@@ -237,13 +237,13 @@ if __name__ == "__main__":
         fp.write(json.dumps(policy_params, sort_keys=True, indent=4))
 
     # Save env params to save_dir
-    with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as fp:
-        fp.write(json.dumps(env_params, sort_keys=True, indent=4))
+    # with open(os.path.join(args.save_dir, 'env_params.json'), 'w') as fp:
+    #     fp.write(json.dumps(env_params, sort_keys=True, indent=4))
 
         
     processes = []
     for rank in range(args.workers):
-        p = mp.Process(target=run_worker, args=(args.save_dir, rank, args.num_epochs, shared_ac, epoch_counter, policy_params))
+        p = mp.Process(target=run_worker, args=(args.save_dir, args.env_name, rank, args.num_epochs, shared_ac, epoch_counter, policy_params))
         p.start()
         processes.append(p)
     for p in processes:

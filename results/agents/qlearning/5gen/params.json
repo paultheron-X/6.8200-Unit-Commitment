@@ -1,0 +1,18 @@
+{
+    "ac_learning_rate": 0.0001,
+    "buffer_size": 2000,
+    "cr_learning_rate": 0.001,
+    "credit_assignment_1hr": 0.9,
+    "entropy_coef": 0.05,
+    "env_name": "5gen",
+    "forecast_horizon_hrs": 12,
+    "minibatch_size": null,
+    "num_epochs": 10000,
+    "num_layers": 3,
+    "num_nodes": 32,
+    "observation_processor": "LimitedHorizonProcessor",
+    "save_dir": "results/agents/qlearning/5gen",
+    "seed": 71956201,
+    "update_epochs": 4,
+    "workers": 4
+}
