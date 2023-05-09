@@ -155,7 +155,7 @@ if __name__ == "__main__":
         
 
         # Initialise environment with forecast profile and reference forecast (for scaling)
-        profile_df = pd.read_csv(args.test_data)
+        profile_df = pd.read_csv(sample_path[i])
         env = make_env(mode='test', profiles_df=profile_df, **env_params)
 
         # Generate scenarios for demand and wind errors
