@@ -42,5 +42,7 @@ python src/tree_search_utils/tests/multiple_day_ahead_forest.py --save_dir $save
                                             --tree_search_func_name $tree_search_func_name \
                                             --heuristic_method $heuristic_method \
                                             --seed 1 \
-                                            --policy_filename $policy_filename 
+                                            --policy_filename $policy_filename \
+                                            --num_files 20 \
+
 

@@ -16,3 +16,10 @@ def get_multiple_profiles_path(path, num_profiles, seed=999):
     np.random.seed(seed)
     files = np.random.choice(files, num_profiles, replace=False)
     return files
+
+def custom_list(array):
+    # transform the array in a list, also all the sub arrays are transformed in lists
+    if isinstance(array, np.ndarray):
+        return [custom_list(x) for x in array]
+    else:
+        return array

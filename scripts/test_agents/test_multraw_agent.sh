@@ -40,5 +40,5 @@ python src/tree_search_utils/tests/multiple_day_ahead_raw_agent.py --save_dir $s
                                             --heuristic_method $heuristic_method \
                                             --seed 1 \
                                             --policy_filename $policy_filename \
-                                            --num_files 10 \
+                                            --num_files 20 \
 

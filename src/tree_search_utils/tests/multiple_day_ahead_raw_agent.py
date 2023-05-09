@@ -22,7 +22,7 @@ import json
 import gc
 import time
 
-from utils import get_multiple_profiles_path
+from utils import get_multiple_profiles_path, custom_list
 
 
 def solve_day_ahead(env, 
@@ -240,13 +240,17 @@ if __name__ == "__main__":
         # add the results to the dictionary
         results_gen['profile'].append(prof_name)
         results_gen['schedule'].append(schedule_result)
-        results_gen['cost'].append(results['total_cost'])
+        results_gen['cost'].append(np.mean(results['total_cost']))
         results_gen['time'].append(time_taken)
-        results_gen['period_time'].append(period_times)
+        #results_gen['period_time'].append(period_times)
         results_gen['lost_loads'].append(100*np.sum(results['lost_load_events'])/(args.num_samples * env.episode_length))
-        
+    
     # save the dictionary
-    with open(os.path.join(args.save_dir, 'results_gen.json'), 'w') as fp:
+    results_gen['schedule'] = [custom_list(results_gen['schedule'][i]) for i in range(len(results_gen['schedule']))]
+
+            
+    # save the dictionary
+    with open(os.path.join(args.save_dir, f'results_gen_{args.num_files}.json'), 'w') as fp:
         fp.write(json.dumps(results_gen, sort_keys=True, indent=4))
         
     # print the results
