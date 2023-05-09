@@ -18,6 +18,8 @@ from agents.ppo.ppo import PPOAgent
 from tree_forest import TreeBuilder, DistributedTreeBuilder
 from utils import get_multiple_profiles_path, custom_list
 
+from day_ahead_forest import solve_day_ahead
+
 
 import numpy as np
 import argparse
@@ -28,61 +30,6 @@ import json
 import gc
 import time
 
-
-def solve_day_ahead(env, horizon, **params):
-    """
-    Solve a day rooted at env.
-
-    Return the schedule and the number of branches at the root for each time period.
-    """
-    env.reset()
-    final_schedule = np.zeros((env.episode_length, env.action_size))
-
-    root = node.Node(env=env, parent=None, action=None, step_cost=0, path_cost=0)
-
-    period_times = []
-    breadths = []
-    for t in range(env.episode_length):
-        period_start_time = time.time()
-        terminal_timestep = min(env.episode_timestep + horizon, env.episode_length - 1)
-
-        forest = TreeBuilder(
-            root_node=root,
-            num_trees=10,
-            terminal_timestep=terminal_timestep,
-            corruption_rate=0.1,
-            num_workers=4,
-            **params,
-        )
-
-        path, cost = forest.build_forest()
-
-        a_best = path[0]
-
-        breadth = len(root.children)
-        breadths.append(breadth)
-
-        final_schedule[t, :] = a_best
-        env.step(a_best, deterministic=True)
-        print(
-            f"Period {env.episode_timestep+1}",
-            np.array(a_best, dtype=int),
-            round(cost, 2),
-            round(time.time() - period_start_time, 2),
-        )
-        root = node.Node(
-            env=env,
-            parent=None,
-            action=None,
-            step_cost=0,
-            path_cost=0,
-        )
-
-        gc.collect()
-
-        period_times.append(time.time() - period_start_time)
-
-    return final_schedule, period_times, breadths
 
 
 if __name__ == "__main__":
@@ -139,7 +86,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--horizon", type=int, required=False, default=1, help="Lookahead horizon")
     parser.add_argument(
-        "--num_scenarios",
+        "--num_trees",
         type=int,
         required=False,
         default=100,
@@ -165,6 +112,20 @@ if __name__ == "__main__":
         required=False,
         default=10,
         help="Number of files to use for testing",
+    )
+    parser.add_argument(
+        "--action_method",
+        type=str,
+        required=False,
+        default="max_min",
+        help="Method to use to select action from children nodes",
+    )
+    parser.add_argument(
+        "--obs_corrupter",
+        type=str,
+        required=False,
+        default="box",
+        help="Method to use to corrupt observations",
     )
 
     args = parser.parse_args()
@@ -235,11 +196,11 @@ if __name__ == "__main__":
         env = make_env(mode="test", profiles_df=profile_df, **env_params)
 
         # Generate scenarios for demand and wind errors
-        scenarios = get_net_demand_scenarios(profile_df, env, args.num_scenarios)
-        demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_scenarios)
+        scenarios = get_net_demand_scenarios(profile_df, env, args.num_trees)
+        demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_trees)
         if env.outages:
             global_outage_scenarios = get_global_outage_scenarios(
-                env, env.episode_length + env.gen_info.status.max(), args.num_scenarios
+                env, env.episode_length + env.gen_info.status.max(), args.num_trees
             )
         else:
             global_outage_scenarios = None
@@ -265,7 +226,10 @@ if __name__ == "__main__":
 
         # Run the tree search
         s = time.time()
-        schedule_result, period_times, breadths = solve_day_ahead(env=env, policy=policy, **params)
+        schedule_result, period_times, breadths = solve_day_ahead(env=env, policy=policy,
+                                                                demand_scenarios=demand_scenarios,
+                                                                wind_scenarios=wind_scenarios,
+                                                            **params)
         time_taken = time.time() - s
 
         # DEBUG: Schedule is an array of size (48, 5) with all the actions across the episode

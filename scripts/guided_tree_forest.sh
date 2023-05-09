@@ -38,9 +38,11 @@ python src/tree_search_utils/day_ahead_forest.py --save_dir $save_dir \
                                             --test_data $testfile \
                                             --branching_threshold $branching_threshold \
                                             --horizon $horizon \
-                                            --num_scenarios 100 \
+                                            --num_trees 100 \
                                             --tree_search_func_name $tree_search_func_name \
                                             --heuristic_method $heuristic_method \
                                             --seed 1 \
-                                            --policy_filename $policy_filename 
+                                            --policy_filename $policy_filename \
+                                            --obs_corrupter auto \
+                                            --action_method max_min
 

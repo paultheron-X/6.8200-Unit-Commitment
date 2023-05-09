@@ -16,8 +16,10 @@ else
     agent=$2
 fi
 
+num_files=20
+seed=1
 
-save_dir=results/raw_agents/multiple_periods/${agent}/test_${date}/
+save_dir=results/raw_agents/multiple_periods/${agent}/test_${num_files}/$seed
 params_filename=results/agents/${agent}/${num_gen}gen/params.json #results/tmp/params.json 
 env_params_filename=results/agents/${agent}/${num_gen}gen/env_params.json #src/ts4uc_scripts/data/day_ahead/${num_gen}gen/30min/env_params.json
 policy_filename=results/agents/${agent}/${num_gen}gen/ac_final.pt #results/tmp/ac_final.pt
@@ -38,7 +40,7 @@ python src/tree_search_utils/tests/multiple_day_ahead_raw_agent.py --save_dir $s
                                             --num_scenarios 100 \
                                             --tree_search_func_name $tree_search_func_name \
                                             --heuristic_method $heuristic_method \
-                                            --seed 1 \
-                                            --policy_filename $policy_filename \
-                                            --num_files 20 \
+                                            --seed $seed \
+                                            --policy_filename $policy_filename  \
+                                            --num_files $num_files \
 

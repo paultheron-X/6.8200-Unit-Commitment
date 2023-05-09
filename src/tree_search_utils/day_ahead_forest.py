@@ -37,6 +37,10 @@ def solve_day_ahead(env, horizon, **params):
     final_schedule = np.zeros((env.episode_length, env.action_size))
 
     root = node.Node(env=env, parent=None, action=None, step_cost=0, path_cost=0)
+    
+    print(f'action method: {params.get("action_method")}')
+    print(f'horizon: {horizon}')
+    print(f'Corrupt method: {params.get("obs_corrupter")}')
 
     period_times = []
     breadths = []
@@ -46,7 +50,6 @@ def solve_day_ahead(env, horizon, **params):
 
         forest = TreeBuilder(
             root_node=root,
-            num_trees=10,
             terminal_timestep=terminal_timestep,
             corruption_rate=0.1,
             num_workers=4,
@@ -138,11 +141,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--horizon", type=int, required=False, default=1, help="Lookahead horizon")
     parser.add_argument(
-        "--num_scenarios",
+        "--num_trees",
         type=int,
         required=False,
         default=100,
-        help="Number of scenarios to use when calculating expected costs",
+        help="Number of scenarios to use when calculating expected costs, this is also going to be the number of trees",
     )
     parser.add_argument(
         "--tree_search_func_name",
@@ -157,6 +160,20 @@ if __name__ == "__main__":
         required=False,
         default="check_lost_load",
         help="Heuristic method to use (when using A* or its variants)",
+    )
+    parser.add_argument(
+        "--action_method",
+        type=str,
+        required=False,
+        default="max_min",
+        help="Method to use to select action from children nodes",
+    )
+    parser.add_argument(
+        "--obs_corrupter",
+        type=str,
+        required=False,
+        default="box",
+        help="Method to use to corrupt observations",
     )
 
     args = parser.parse_args()
@@ -208,11 +225,12 @@ if __name__ == "__main__":
     env = make_env(mode="test", profiles_df=profile_df, **env_params)
 
     # Generate scenarios for demand and wind errors
-    scenarios = get_net_demand_scenarios(profile_df, env, args.num_scenarios)
-    demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_scenarios)
+    scenarios = get_net_demand_scenarios(profile_df, env, args.num_trees)
+    demand_scenarios, wind_scenarios = get_scenarios(profile_df, env, args.num_trees)
+
     if env.outages:
         global_outage_scenarios = get_global_outage_scenarios(
-            env, env.episode_length + env.gen_info.status.max(), args.num_scenarios
+            env, env.episode_length + env.gen_info.status.max(), args.num_trees
         )
     else:
         global_outage_scenarios = None
@@ -238,7 +256,10 @@ if __name__ == "__main__":
 
     # Run the tree search
     s = time.time()
-    schedule_result, period_times, breadths = solve_day_ahead(env=env, policy=policy, **params)
+    schedule_result, period_times, breadths = solve_day_ahead(env=env, policy=policy,
+                                                                demand_scenarios=demand_scenarios,
+                                                                wind_scenarios=wind_scenarios,
+                                                            **params)
     time_taken = time.time() - s
 
     # DEBUG: Schedule is an array of size (48, 5) with all the actions across the episode
