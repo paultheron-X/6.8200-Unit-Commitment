@@ -136,3 +136,7 @@ results/agents/test
 
 results/guided_tree_search/*
 results/raw_agents/*
+
+profile*.txt
+
+*params.json
