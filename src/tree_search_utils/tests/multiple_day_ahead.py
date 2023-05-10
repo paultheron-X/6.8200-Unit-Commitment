@@ -12,6 +12,8 @@ from agents.qlearning.old.qagent import QAgent
 from agents.ppo.ppo import PPOAgent
 from agents.random.random_agent import RandomAgent
 from agents.only1s.only1s_agent import Only1sAgent
+from agents.a3c.a3c import A3CAgent
+
 
 from tree_search_utils.algos import uniform_cost_search, a_star, rta_star, brute_force, uniform_cost_search_robust
 
@@ -195,6 +197,8 @@ if __name__ == "__main__":
                 policy = RandomAgent(env)
             elif agent_type == 'only1s':
                 policy = Only1sAgent(env)
+            elif agent_type == 'a3c':
+                policy = A3CAgent(env, test_seed=args.seed, **policy_params)
             else:
                 raise ValueError("Unknown agent type")
             if torch.cuda.is_available():
