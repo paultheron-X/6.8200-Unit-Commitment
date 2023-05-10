@@ -1,0 +1,4 @@
+{
+    "max_steps":100000,
+    "device":"cpu"
+}
