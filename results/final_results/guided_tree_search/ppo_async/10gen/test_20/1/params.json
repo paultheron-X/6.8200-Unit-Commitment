@@ -1,0 +1,15 @@
+{
+    "branching_threshold": 0.05,
+    "env_params_fn": "results/agents/ppo_async/10gen/env_params.json",
+    "heuristic_method": null,
+    "horizon": 2,
+    "num_files": 20,
+    "num_samples": 1000,
+    "num_scenarios": 100,
+    "policy_filename": "results/agents/ppo_async/10gen/ac_final.pt",
+    "policy_params_fn": "results/agents/ppo_async/10gen/params.json",
+    "save_dir": "results/final_results/guided_tree_search/ppo_async/10gen/test_20/1",
+    "seed": 1,
+    "test_data": "data/day_ahead/10gen/30min/profile_2019-11-09.csv",
+    "tree_search_func_name": "uniform_cost_search"
+}
