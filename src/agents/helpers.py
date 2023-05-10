@@ -218,12 +218,12 @@ def save_results(prof_name,
     if env.curtailment:
         columns.append('curtailment')
     schedule_df = pd.DataFrame(schedule, columns=columns)
-    schedule_df.to_csv(os.path.join(save_dir, '{}_solution.csv'.format(prof_name)), index=False)
+    #schedule_df.to_csv(os.path.join(save_dir, '{}_solution.csv'.format(prof_name)), index=False)
 
     if period_time_taken is not None:
         period_tt_df = pd.DataFrame({'period': np.arange(len(period_time_taken)),
                                      'time': period_time_taken})
-        period_tt_df.to_csv(os.path.join(save_dir, '{}_period_times.csv'.format(prof_name)), index=False)
+        #period_tt_df.to_csv(os.path.join(save_dir, '{}_period_times.csv'.format(prof_name)), index=False)
 
     if (depths != None) or (breadths != None):
         tree_df = pd.DataFrame({'period': np.arange(schedule.shape[0])})
@@ -232,12 +232,12 @@ def save_results(prof_name,
         if breadths != None:
             tree_df['breadth'] = breadths
                                
-        tree_df.to_csv(os.path.join(save_dir, '{}_tree.csv'.format(prof_name)), index=False)
+        #tree_df.to_csv(os.path.join(save_dir, '{}_tree.csv'.format(prof_name)), index=False)
 
     if results_df is not None:
         results_df['profile'] = prof_name
         results_df['usd_per_mwh'] = results_df.total_cost / results_df.demand_mwh
-        results_df.to_csv(os.path.join(save_dir, '{}_results.csv'.format(prof_name)), index=False)
+        #results_df.to_csv(os.path.join(save_dir, '{}_results.csv'.format(prof_name)), index=False)
 
     # save time taken
     with open(os.path.join(save_dir, '{}_time.txt'.format(prof_name)), 'w') as f:
@@ -259,20 +259,20 @@ def save_results_rolling(prof_name,
                             'cost': cost,
                             'time': time,
                             'lolp': lolp}, index=[0])
-    results_df.to_csv(os.path.join(save_dir, 'results.csv'), index=False)
+    #results_df.to_csv(os.path.join(save_dir, 'results.csv'), index=False)
 
     # Save schedule 
     columns =  ['schedule_' + str(i) for i in range(schedule.shape[1])]
     schedule_df = pd.DataFrame(schedule, columns=columns)
     schedule_df['net_demand'] = real_net_demands
     schedule_df['profile'] = prof_name
-    schedule_df.to_csv(os.path.join(save_dir, 'schedule.csv'), index=False)
+    #schedule_df.to_csv(os.path.join(save_dir, 'schedule.csv'), index=False)
 
     # Save depths
     if depths is not None:
         tree_df = pd.DataFrame({'period': np.arange(schedule.shape[0])})
         tree_df['depth'] = depths
-        tree_df.to_csv(os.path.join(save_dir, 'tree.csv'), index=False)
+        #tree_df.to_csv(os.path.join(save_dir, 'tree.csv'), index=False)
         
 
 def get_scenarios(env, N):

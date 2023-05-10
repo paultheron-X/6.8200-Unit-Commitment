@@ -14,4 +14,24 @@ class Only1sAgent():
         """
         action = np.ones(self.action_size)
         return action
+    
+    def generate_action(self, **kwargs):
+        """
+        Agent always acts greedily w.r.t Q-values!
+        """
+        action = np.ones(self.action_size)
+        return action
+    
+    def generate_multiple_actions_batched(self,**kwargs):
+        """
+        Agent always acts greedily w.r.t Q-values!
+        """
+        
+        n_action = 1/0.05
+        actions =  np.ones((n_action,self.action_size))
+        
+        action_dict = {}
+        for i in range(n_action):
+            action_dict[i] = actions[i]
+        return action_dict, 0
    

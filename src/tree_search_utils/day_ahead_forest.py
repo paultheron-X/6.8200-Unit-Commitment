@@ -15,7 +15,7 @@ from agents.ppo_async.ac_agent import ACAgent
 from agents.qlearning.old.qagent import QAgent
 from agents.ppo.ppo import PPOAgent
 
-from tree_forest import TreeBuilder, DistributedTreeBuilder
+from tree_search_utils.tree_forest import TreeBuilder, DistributedTreeBuilder
 
 import numpy as np
 import argparse

@@ -14,11 +14,12 @@ from tree_search_utils.scenarios import (
 from agents.ppo_async.ac_agent import ACAgent
 from agents.qlearning.old.qagent import QAgent
 from agents.ppo.ppo import PPOAgent
+from agents.random.random_agent import RandomAgent
+from agents.only1s.only1s_agent import Only1sAgent
 
-from tree_forest import TreeBuilder, DistributedTreeBuilder
 from utils import get_multiple_profiles_path, custom_list
 
-from day_ahead_forest import solve_day_ahead
+from tree_search_utils.day_ahead_forest import solve_day_ahead
 
 
 import numpy as np
@@ -192,7 +193,7 @@ if __name__ == "__main__":
         print("------------------")
 
         # Initialise environment with forecast profile and reference forecast (for scaling)
-        profile_df = pd.read_csv(args.test_data)
+        profile_df = pd.read_csv(sample_path[i])
         env = make_env(mode="test", profiles_df=profile_df, **env_params)
 
         # Generate scenarios for demand and wind errors
@@ -213,13 +214,21 @@ if __name__ == "__main__":
                 policy = QAgent(env, test_seed=args.seed, **policy_params)
             elif agent_type == "ppo":
                 policy = PPOAgent(env, test_seed=args.seed, **policy_params)
+            elif agent_type == 'random':
+                policy = RandomAgent(env)
+            elif agent_type == 'only1s':
+                policy = Only1sAgent(env)
             else:
                 raise ValueError("Unknown agent type")
             if torch.cuda.is_available():
                 policy.cuda()
-            policy.load_state_dict(torch.load(args.policy_filename))
-            policy.eval()
-            print("Guided search")
+            if agent_type != 'random' and agent_type != 'only1s':
+                policy.load_state_dict(torch.load(args.policy_filename))        
+                policy.eval()
+                print("Guided search")
+            else:
+                print("Greedy search") 
+                policy.eval()
         else:
             policy = None
             print("Unguided search")
