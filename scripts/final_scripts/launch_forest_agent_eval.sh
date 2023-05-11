@@ -1,6 +1,6 @@
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
 
-for agent in ppo_async #fppo sac a3c random
+for agent in a3c #a3c sac a3c random
 do
     for num_gen in 5 10 
     do
