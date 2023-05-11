@@ -4,7 +4,7 @@ for agent in ppo_async #fppo sac a3c random
 do
     for num_gen in 5 10 
     do
-        for action_method in max_min max_avg max_min_central
+        for action_method in max_min max_avg #max_min_central
         do
             for obs_corrupter in auto box
             do
