@@ -1,0 +1,128 @@
+{
+    "5": {
+        "a3c": {
+            "50": {
+                "max_avg": {
+                    "auto": {
+                        "avg_cost": 263419.57,
+                        "std_cost": 39341.13,
+                        "avg_runtime": 26.99
+                    }
+                },
+                "max_min": {
+                    "box": {
+                        "avg_cost": 265045.78,
+                        "std_cost": 38549.41,
+                        "avg_runtime": 25.61
+                    },
+                    "auto": {
+                        "avg_cost": 263419.57,
+                        "std_cost": 39341.13,
+                        "avg_runtime": 27.0
+                    }
+                }
+            },
+            "10": {
+                "max_avg": {
+                    "box": {
+                        "avg_cost": 265006.74,
+                        "std_cost": 38756.28,
+                        "avg_runtime": 7.6
+                    },
+                    "auto": {
+                        "avg_cost": 263665.38,
+                        "std_cost": 38862.42,
+                        "avg_runtime": 8.18
+                    }
+                },
+                "max_min": {
+                    "box": {
+                        "avg_cost": 265006.74,
+                        "std_cost": 38756.28,
+                        "avg_runtime": 7.94
+                    },
+                    "auto": {
+                        "avg_cost": 263665.38,
+                        "std_cost": 38862.42,
+                        "avg_runtime": 8.3
+                    }
+                }
+            },
+            "100": {
+                "max_avg": {
+                    "auto": {
+                        "avg_cost": 264096.77,
+                        "std_cost": 38729.58,
+                        "avg_runtime": 46.96
+                    }
+                },
+                "max_min": {
+                    "box": {
+                        "avg_cost": 265054.54,
+                        "std_cost": 38519.81,
+                        "avg_runtime": 46.31
+                    },
+                    "auto": {
+                        "avg_cost": 264096.77,
+                        "std_cost": 38729.58,
+                        "avg_runtime": 49.03
+                    }
+                }
+            }
+        },
+        "ppo_async": {
+            "50": {
+                "max_avg": {
+                    "auto": {}
+                },
+                "max_min": {
+                    "box": {
+                        "avg_cost": 246136.43,
+                        "std_cost": 59009.16,
+                        "avg_runtime": 182.07
+                    },
+                    "auto": {
+                        "avg_cost": 230230.54,
+                        "std_cost": 39307.93,
+                        "avg_runtime": 149.24
+                    }
+                }
+            },
+            "10": {
+                "max_avg": {
+                    "auto": {
+                        "avg_cost": 234203.41,
+                        "std_cost": 40778.12,
+                        "avg_runtime": 31.71
+                    }
+                },
+                "max_min": {
+                    "box": {
+                        "avg_cost": 251143.47,
+                        "std_cost": 71291.08,
+                        "avg_runtime": 34.41
+                    },
+                    "auto": {
+                        "avg_cost": 234203.41,
+                        "std_cost": 40778.12,
+                        "avg_runtime": 33.49
+                    }
+                }
+            },
+            "100": {
+                "max_min": {
+                    "box": {
+                        "avg_cost": 348162.13,
+                        "std_cost": 341497.85,
+                        "avg_runtime": 326.75
+                    },
+                    "auto": {
+                        "avg_cost": 236945.48,
+                        "std_cost": 54229.59,
+                        "avg_runtime": 331.66
+                    }
+                }
+            }
+        }
+    }
+}
